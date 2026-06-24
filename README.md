@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # caregiver_app
 
 A new Flutter project.
@@ -15,3 +16,7 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# elderly-care-app
+The project proposes a mobile‑based app to take care of elderly people.
+>>>>>>> 25405fa624c46d667ec65fecb588362f6037b286
