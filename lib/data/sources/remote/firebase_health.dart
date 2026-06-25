@@ -43,5 +43,8 @@ class FirebaseHealthSource {
     return withId;
   }
 
+  Future<void> updateReading(HealthModel reading) async {
+    await _col.doc(reading.id).update(reading.toJson());
+  }
   Future<void> deleteReading(String id) => _col.doc(id).delete();
 }
