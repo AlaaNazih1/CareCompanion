@@ -10,7 +10,6 @@ class FirebaseAlertSource {
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection(AppConstants.alertsCollection);
 
-  // ── تابع تنبيهات الـ caregiver real-time ────────────
   Stream<List<AlertModel>> watchAlerts(String caregiverId) =>
       _col
           .where('caregiverId', isEqualTo: caregiverId)
@@ -21,7 +20,6 @@ class FirebaseAlertSource {
               .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
               .toList());
 
-  // ── التنبيهات الغير مقروءة بس ───────────────────────
   Stream<int> watchUnreadCount(String caregiverId) =>
       _col
           .where('caregiverId', isEqualTo: caregiverId)
@@ -29,7 +27,6 @@ class FirebaseAlertSource {
           .snapshots()
           .map((s) => s.docs.length);
 
-  // ── أرسل تنبيه جديد ─────────────────────────────────
   Future<AlertModel> sendAlert(AlertModel alert) async {
     final ref = _col.doc();
     final withId = alert.copyWith(id: ref.id);
@@ -37,11 +34,9 @@ class FirebaseAlertSource {
     return withId;
   }
 
-  // ── اتقرا التنبيه ───────────────────────────────────
   Future<void> markAsRead(String alertId) =>
       _col.doc(alertId).update({'isRead': true});
 
-  // ── اتقرأ كل التنبيهات دفعة واحدة ──────────────────
   Future<void> markAllAsRead(String caregiverId) async {
     final batch = _db.batch();
     final snap = await _col
@@ -54,7 +49,6 @@ class FirebaseAlertSource {
     await batch.commit();
   }
 
-  // ── جيب تنبيهات نوع معين ────────────────────────────
   Future<List<AlertModel>> getAlertsByType({
     required String caregiverId,
     required String type,
