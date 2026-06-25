@@ -68,4 +68,17 @@ class FirebaseAlertSource {
         .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
         .toList();
   }
+  Future<List<AlertModel>> getAlerts(String caregiverId) async {
+    final snap = await _col
+        .where('caregiverId', isEqualTo: caregiverId)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snap.docs
+        .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
+        .toList();
+  }
+  Future<void> deleteAlert(String alertId) async {
+    await _col.doc(alertId).delete();
+  }
 }
