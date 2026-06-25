@@ -1,3 +1,4 @@
+import '../../core/failures.dart';
 import '../../core/network_info.dart';
 import '../../logic/repositories/i_medication_repo.dart';
 import '../models/medication_model.dart';
@@ -15,97 +16,127 @@ class MedicationRepositoryImpl implements IMedicationRepository {
     required this.networkInfo,
   });
 
-@override
+  @override
   Stream<List<MedicationModel>> watchMedications(String elderlyId) async* {
     if (await networkInfo.isConnected) {
-      yield* remote.watchMedications(elderlyId).asyncMap((medications) async {
-        await local.cacheMedications(medications);
-        return medications;
-      });
+      try {
+        yield* remote.watchMedications(elderlyId).asyncMap((medications) async {
+          await local.cacheMedications(medications);
+          return medications;
+        });
+      } catch (_) {
+        yield await local.getCachedMedications();
+      }
     } else {
-      yield local.getCachedMedications();
+      yield await local.getCachedMedications();
     }
   }
 
-@override
+  @override
   Stream<List<MedicationModel>> watchTodayMedications(String elderlyId) async* {
     if (await networkInfo.isConnected) {
-      yield* remote.watchTodayMedications(elderlyId).asyncMap((
-        medications,
-      ) async {
-        await local.cacheMedications(medications);
-        return medications;
-      });
+      try {
+        yield* remote.watchTodayMedications(elderlyId).asyncMap((
+          medications,
+        ) async {
+          await local.cacheMedications(medications);
+          return medications;
+        });
+      } catch (_) {
+        yield await _filteredTodayCache();
+      }
     } else {
-      final cached = local.getCachedMedications();
-
-      final today = [
-        'monday',
-        'tuesday',
-        'wednesday',
-        'thursday',
-        'friday',
-        'saturday',
-        'sunday',
-      ][DateTime.now().weekday - 1];
-
-      yield cached.where((medication) {
-        return medication.days.contains(today) ||
-            medication.days.contains('daily');
-      }).toList();
+      yield await _filteredTodayCache();
     }
   }
 
- @override
+  Future<List<MedicationModel>> _filteredTodayCache() async {
+    final cached = await local.getCachedMedications();
+
+    const days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    final today = days[DateTime.now().weekday - 1];
+
+    return cached.where((medication) {
+      return medication.days.contains(today) ||
+          medication.days.contains('daily');
+    }).toList();
+  }
+
+  @override
   Future<MedicationModel?> getMedication(String medicationId) async {
     if (await networkInfo.isConnected) {
-      return remote.getMedication(medicationId);
+      try {
+        return await remote.getMedication(medicationId);
+      } catch (e) {
+        throw ServerFailure(details: e.toString());
+      }
     }
-
-    final medications = local.getCachedMedications();
 
     try {
-      return medications.firstWhere(
-        (medication) => medication.id == medicationId,
-      );
-    } catch (_) {
-      return null;
+      final medications = await local.getCachedMedications();
+      try {
+        return medications.firstWhere((m) => m.id == medicationId);
+      } catch (_) {
+        return null;
+      }
+    } catch (e) {
+      throw CacheFailure(details: e.toString());
     }
   }
 
-@override
+  @override
   Future<MedicationModel> addMedication(MedicationModel medication) async {
     if (!await networkInfo.isConnected) {
-      throw Exception('No internet connection');
+      throw const NetworkFailure();
     }
-
-    return remote.addMedication(medication);
+    try {
+      return await remote.addMedication(medication);
+    } catch (e) {
+      throw ServerFailure(details: e.toString());
+    }
   }
 
- @override
+  @override
   Future<void> updateMedication(MedicationModel medication) async {
     if (!await networkInfo.isConnected) {
-      throw Exception('No internet connection');
+      throw const NetworkFailure();
     }
-
-    await remote.updateMedication(medication);
+    try {
+      await remote.updateMedication(medication);
+    } catch (e) {
+      throw ServerFailure(details: e.toString());
+    }
   }
 
-@override
+  @override
   Future<void> deleteMedication(String medicationId) async {
     if (!await networkInfo.isConnected) {
-      throw Exception('No internet connection');
+      throw const NetworkFailure();
     }
-
-    await remote.deleteMedication(medicationId);
+    try {
+      await remote.deleteMedication(medicationId);
+    } catch (e) {
+      throw ServerFailure(details: e.toString());
+    }
   }
 
- @override
+  @override
   Future<void> markAsTaken(String medicationId) async {
     if (!await networkInfo.isConnected) {
-      throw Exception('No internet connection');
+      throw const NetworkFailure();
     }
-
-    await remote.markAsTaken(medicationId);
+    try {
+      await remote.markAsTaken(medicationId);
+    } catch (e) {
+      throw ServerFailure(details: e.toString());
+    }
   }
 }
