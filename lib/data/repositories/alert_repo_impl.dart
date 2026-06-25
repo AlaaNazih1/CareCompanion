@@ -1,5 +1,4 @@
-import 'package:caregiver_app/core/failures.dart';
-
+import '../../core/failures.dart';
 import '../../core/network_info.dart';
 import '../../logic/repositories/i_alert_repo.dart';
 import '../models/alert_model.dart';
@@ -11,13 +10,25 @@ class AlertRepositoryImpl implements IAlertRepository {
 
   AlertRepositoryImpl({required this.remote, required this.networkInfo});
 
-  @override
-  @override
-  Stream<List<AlertModel>> watchAlerts(String elderlyId) async* {
+  Future<void> _checkConnection() async {
     if (!await networkInfo.isConnected) {
       throw const NetworkFailure();
     }
+  }
 
+  
+  Future<T> _guard<T>(Future<T> Function() action) async {
+    await _checkConnection();
+    try {
+      return await action();
+    } catch (e) {
+      throw ServerFailure(details: e.toString());
+    }
+  }
+
+  @override
+  Stream<List<AlertModel>> watchAlerts(String elderlyId) async* {
+    await _checkConnection();
     try {
       yield* remote.watchAlerts(elderlyId);
     } catch (e) {
@@ -25,55 +36,23 @@ class AlertRepositoryImpl implements IAlertRepository {
     }
   }
 
- @override
-  Future<List<AlertModel>> getAlerts(String elderlyId) async {
-    if (!await networkInfo.isConnected) {
-      throw const NetworkFailure();
-    }
-
-    try {
-      return await remote.getAlerts(elderlyId);
-    } catch (e) {
-      throw ServerFailure(details: e.toString());
-    }
-  }
-
- @override
-  Future<AlertModel> sendAlert(AlertModel alert) async {
-    if (!await networkInfo.isConnected) {
-      throw const NetworkFailure();
-    }
-
-    try {
-      return await remote.sendAlert(alert);
-    } catch (e) {
-      throw ServerFailure(details: e.toString());
-    }
-  }
-
-@override
-  Future<void> markAsRead(String alertId) async {
-    if (!await networkInfo.isConnected) {
-      throw const NetworkFailure();
-    }
-
-    try {
-      await remote.markAsRead(alertId);
-    } catch (e) {
-      throw ServerFailure(details: e.toString());
-    }
+  @override
+  Future<List<AlertModel>> getAlerts(String elderlyId) {
+    return _guard(() => remote.getAlerts(elderlyId));
   }
 
   @override
-  Future<void> deleteAlert(String alertId) async {
-    if (!await networkInfo.isConnected) {
-      throw const NetworkFailure();
-    }
+  Future<AlertModel> sendAlert(AlertModel alert) {
+    return _guard(() => remote.sendAlert(alert));
+  }
 
-    try {
-      await remote.deleteAlert(alertId);
-    } catch (e) {
-      throw ServerFailure(details: e.toString());
-    }
+  @override
+  Future<void> markAsRead(String alertId) {
+    return _guard(() => remote.markAsRead(alertId));
+  }
+
+  @override
+  Future<void> deleteAlert(String alertId) {
+    return _guard(() => remote.deleteAlert(alertId));
   }
 }
