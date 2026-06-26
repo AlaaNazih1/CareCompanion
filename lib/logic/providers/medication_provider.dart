@@ -1,18 +1,14 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:caregiver_app/logic/providers/base_provider.dart';
 
 import '../../data/models/medication_model.dart';
 import '../use_cases/track_medication.dart';
 
-class MedicationProvider extends ChangeNotifier {
+class MedicationProvider extends BaseProvider {
   final TrackMedicationUseCase _useCase;
 
   MedicationProvider(this._useCase);
-
-  bool _isLoading = false;
-  String? _error;
-  bool _disposed = false;
 
   List<MedicationModel> _medications = [];
   List<MedicationModel> _todayMedications = [];
@@ -24,38 +20,12 @@ class MedicationProvider extends ChangeNotifier {
 
   //================== Getters ==================
 
-  bool get isLoading => _isLoading;
-
-  String? get error => _error;
-
   List<MedicationModel> get medications => List.unmodifiable(_medications);
 
   List<MedicationModel> get todayMedications =>
       List.unmodifiable(_todayMedications);
 
   MedicationModel? get selectedMedication => _selectedMedication;
-
-  //================== Private Helpers ==================
-
-  
-  void _safeNotify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    _isLoading = true;
-    _error = null;
-    _safeNotify();
-
-    try {
-      await action();
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      _safeNotify();
-    }
-  }
 
   //================== Streams ==================
 
@@ -67,11 +37,10 @@ class MedicationProvider extends ChangeNotifier {
         .listen(
           (data) {
             _medications = data;
-            _safeNotify();
+            safeNotify();
           },
           onError: (error) {
-            _error = error.toString();
-            _safeNotify();
+            setError(error.toString());
           },
         );
   }
@@ -84,11 +53,10 @@ class MedicationProvider extends ChangeNotifier {
         .listen(
           (data) {
             _todayMedications = data;
-            _safeNotify();
+            safeNotify();
           },
           onError: (error) {
-            _error = error.toString();
-            _safeNotify();
+            setError(error.toString());
           },
         );
   }
@@ -96,39 +64,39 @@ class MedicationProvider extends ChangeNotifier {
   //================== CRUD ==================
 
   Future<void> addMedication(MedicationModel medication) {
-    return _run(() => _useCase.addMedication(medication));
+    return execute(() => _useCase.addMedication(medication));
   }
 
   Future<void> updateMedication(MedicationModel medication) {
-    return _run(() => _useCase.updateMedication(medication));
+    return execute(() => _useCase.updateMedication(medication));
   }
 
   Future<void> deleteMedication(String medicationId) {
-    return _run(() => _useCase.deleteMedication(medicationId));
+    return execute(() => _useCase.deleteMedication(medicationId));
   }
 
   Future<void> markAsTaken(String medicationId) {
-    return _run(() => _useCase.markAsTaken(medicationId));
+    return execute(() => _useCase.markAsTaken(medicationId));
   }
 
   //================== Selected Medication ==================
 
   Future<void> loadMedication(String medicationId) {
-    return _run(() async {
+    return execute(() async {
       _selectedMedication = await _useCase.getMedication(medicationId);
     });
   }
 
   void clearSelectedMedication() {
     _selectedMedication = null;
-    _safeNotify();
+    safeNotify();
   }
 
   //================== Dispose ==================
 
   @override
   void dispose() {
-    _disposed = true;
+    dispose();
     _medicationsSubscription?.cancel();
     _todaySubscription?.cancel();
     super.dispose();
