@@ -96,7 +96,6 @@ class MedicationProvider extends BaseProvider {
 
   @override
   void dispose() {
-    dispose();
     _medicationsSubscription?.cancel();
     _todaySubscription?.cancel();
     super.dispose();

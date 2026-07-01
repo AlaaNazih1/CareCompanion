@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:caregiver_app/core/failures.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../services/location_service.dart';
@@ -36,7 +37,7 @@ class LocationProvider extends BaseProvider {
   Future<void> startTracking() async {
     _permissionGranted = await _locationService.requestPermission();
     if (!_permissionGranted) {
-      setError('Location permission denied');
+     PermissionFailure(permission: "Location");
       return;
     }
 

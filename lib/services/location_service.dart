@@ -1,3 +1,4 @@
+import 'package:caregiver_app/core/failures.dart';
 import 'package:geolocator/geolocator.dart';
 
 class LocationService {
@@ -32,7 +33,7 @@ class LocationService {
   Future<Position> getCurrentLocation() async {
     final hasPermission = await requestPermission();
     if (!hasPermission) {
-      throw Exception('Location permission denied');
+      throw PermissionFailure(permission: 'Location ');
     }
 
     return Geolocator.getCurrentPosition(
@@ -44,7 +45,7 @@ class LocationService {
   Stream<Position> watchLocation() async* {
     final hasPermission = await requestPermission();
     if (!hasPermission) {
-      throw Exception('Location permission denied');
+      throw PermissionFailure(permission: "Location");
     }
 
     yield* Geolocator.getPositionStream(

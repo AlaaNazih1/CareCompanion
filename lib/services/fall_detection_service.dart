@@ -78,5 +78,8 @@ class FallDetectionService {
   bool get isListening => _subscription != null;
   Future<void> dispose() async {
     await stopListening();
+    onFallDetected = null;
+    onError = null;
+    
   }
 }

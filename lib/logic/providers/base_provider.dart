@@ -31,7 +31,7 @@ abstract class BaseProvider extends ChangeNotifier {
     try {
       await action();
     } catch (e) {
-      _error = e.toString();
+     setError(e.toString());
     } finally {
       _isLoading = false;
       safeNotify();

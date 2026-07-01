@@ -36,8 +36,7 @@ class HealthProvider extends BaseProvider {
             safeNotify();
           },
           onError: (error) {
-            error = error.toString();
-            safeNotify();
+            setError(error.toString());
           },
         );
   }
@@ -82,7 +81,6 @@ class HealthProvider extends BaseProvider {
 
   @override
   void dispose() {
-    dispose();
     _subscription?.cancel();
     super.dispose();
   }

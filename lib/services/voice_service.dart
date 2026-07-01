@@ -37,5 +37,7 @@ class VoiceService {
     await _tts.pause();
   }
 
-
+Future<void> dispose() async {
+    await _tts.stop();
+  }
 }
