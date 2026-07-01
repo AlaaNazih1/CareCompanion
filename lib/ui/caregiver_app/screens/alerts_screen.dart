@@ -2,6 +2,7 @@
 //  lib/ui/caregiver_app/screens/alerts_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:care_companion/ui/shared/widgets/app_widgets.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants.dart';
 import '../../shared/theme/app_colors.dart';

@@ -1,4 +1,4 @@
-import 'package:caregiver_app/data/models/alert_model.dart';
+import 'package:care_companion/data/models/alert_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants.dart';
 
@@ -61,5 +61,18 @@ class FirebaseAlertSource {
     return snap.docs
         .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
         .toList();
+  }
+  Future<List<AlertModel>> getAlerts(String caregiverId) async {
+    final snap = await _col
+        .where('caregiverId', isEqualTo: caregiverId)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snap.docs
+        .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
+        .toList();
+  }
+  Future<void> deleteAlert(String alertId) async {
+    await _col.doc(alertId).delete();
   }
 }

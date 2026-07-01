@@ -1,4 +1,4 @@
-import 'package:caregiver_app/data/models/medication_model.dart';
+import 'package:care_companion/data/models/medication_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants.dart';
 
