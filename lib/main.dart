@@ -1,6 +1,8 @@
+import 'package:care_companion/ui/shared/theme/app_colors.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants.dart';
 import 'router/app_router.dart';
@@ -9,21 +11,38 @@ import 'services/notification_service.dart';
 import 'services/voice_service.dart';
 import 'ui/shared/theme/app_theme.dart';
 import 'logic/providers/auth_provider.dart';
+import 'logic/providers/settings_provider.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ── Firebase ──────────────────────────────────
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
 
   // ── Notifications ─────────────────────────────
-  await NotificationService.init();
+  try {
+    await NotificationService.init();
+  } catch (e, s) {
+    debugPrint('Notification init failed: $e');
+    debugPrintStack(stackTrace: s);
+  }
 
   // ── TTS ───────────────────────────────────────
-  await VoiceService.initTts();
+  try {
+    await VoiceService.initTts();
+  } catch (e, s) {
+    debugPrint('TTS init failed: $e');
+    debugPrintStack(stackTrace: s);
+  }
 
   // ── Portrait Only ─────────────────────────────
   await SystemChrome.setPreferredOrientations([
@@ -34,13 +53,17 @@ void main() async {
   // ── Status Bar ────────────────────────────────
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor:            Colors.transparent,
+      statusBarIconBrightness:   Brightness.light,
     ),
   );
 
   runApp(const ProviderScope(child: MyApp()));
 }
 
+// ══════════════════════════════════════════════
+//  MyApp
+// ══════════════════════════════════════════════
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
@@ -48,49 +71,88 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
 
-    return authState.when(
-      loading: () => const _LoadingApp(),
-      error:   (_, __) => _buildApp(context, ref, isLoggedIn: false),
-      data:    (user)  => _buildApp(context, ref, isLoggedIn: user != null),
-    );
-  }
+    // لو Firebase لسه بيحمل → شاشة loading
+    if (authState.isLoading) return const _LoadingApp();
 
-  Widget _buildApp(
-    BuildContext context,
-    WidgetRef ref, {
-    required bool isLoggedIn,
-  }) {
-    // جيب بيانات المستخدم عشان نعرف هو كبير ولا ابن
+    // جيب بيانات المستخدم عشان نحدد الـ theme
     final userAsync = ref.watch(currentUserProvider);
     final isElderly = userAsync.valueOrNull?.isElderly ?? true;
 
+    // ── إعدادات الوضع الليلي واللغة ─────────────
+    final themeMode = ref.watch(themeModeProvider);
+    final locale    = ref.watch(localeProvider);
+
     return MaterialApp(
-      title:        isElderly
+      title:                    isElderly
           ? AppConstants.elderlyAppName
           : AppConstants.caregiverAppName,
       debugShowCheckedModeBanner: false,
+
+      // ── Theme حسب نوع المستخدم + الوضع الليلي/النهاري ──
+      // دلوقتي darkTheme بقى ثيم مختلف فعليًا عن اللايت
+      // (شوف ui/shared/theme/app_theme.dart)
       theme: isElderly
           ? AppTheme.elderlyTheme
           : AppTheme.caregiverTheme,
+      darkTheme: isElderly
+          ? AppTheme.elderlyThemeDark
+          : AppTheme.caregiverThemeDark,
+      themeMode: themeMode,
+
+      // ── اللغة الحالية ────────────────────────────
+      locale: locale,
+
+      // ── تفعيل الترجمة فعليًا (كانت الناقصة اللي بتعمل الكراش) ──
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('ar'),
+      ],
+
+      // ── اتجاه الشاشة يتغير تلقائيًا حسب اللغة (RTL/LTR) ──
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return Directionality(
+          textDirection: locale.languageCode == 'ar'
+              ? TextDirection.rtl
+              : TextDirection.ltr,
+          child: child,
+        );
+      },
+
+      // الراوتر
       onGenerateRoute: AppRouter.onGenerateRoute,
-      initialRoute: isLoggedIn
-          ? (isElderly
-              ? RouteNames.elderlyHome
-              : RouteNames.caregiverDashboard)
-          : RouteNames.elderlyHome,
+
+      // دايماً نبدأ من السبلاش — هي اللي بتقرر بعدين
+      initialRoute: RouteNames.splash,
     );
   }
 }
 
-// ── Loading Splash ────────────────────────────
+// ══════════════════════════════════════════════
+//  Loading App — بس لما Firebase بيحمل
+// ══════════════════════════════════════════════
 class _LoadingApp extends StatelessWidget {
   const _LoadingApp();
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: const [
+      Locale('en'),
+      Locale('ar'),
+    ],
     home: Scaffold(
-      backgroundColor: const Color(0xFF1A73E8),
+      backgroundColor: AppColors.elderlyPrimary,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -103,18 +165,22 @@ class _LoadingApp extends StatelessWidget {
               ),
               child: const Icon(
                 Icons.favorite_rounded,
-                color: Colors.white, size: 44),
+                color: Colors.white, size: 44,
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
-              'رعايتي',
+              'Care Companion',
               style: TextStyle(
-                fontSize: 32, fontWeight: FontWeight.w700,
-                color: Colors.white),
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 40),
             const CircularProgressIndicator(
-              color: Colors.white, strokeWidth: 3),
+              color: Colors.white, strokeWidth: 3,
+            ),
           ],
         ),
       ),

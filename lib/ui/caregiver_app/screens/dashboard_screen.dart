@@ -2,10 +2,19 @@
 //  lib/ui/caregiver_app/screens/dashboard_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:care_companion/logic/providers/alert_provider.dart';
+import 'package:care_companion/logic/providers/auth_provider.dart';
+import 'package:care_companion/logic/providers/health_provider.dart';
+import 'package:care_companion/logic/providers/medication_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants.dart';
 import '../../../core/extensions.dart';
+import '../../../data/models/alert_model.dart';
+import '../../../data/models/health_model.dart';
+import '../../../logic/providers/common_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
@@ -13,15 +22,18 @@ import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
 import 'alerts_screen.dart';
 import 'location_screen.dart';
+import 'medication_management_screen.dart';
+import 'reports_screen.dart';
+import '../../shared/screens/settings_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with TickerProviderStateMixin {
 
   late AnimationController _idleCtrl;
@@ -30,27 +42,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   late Animation<double>   _pulseAnim;
 
   int _currentIndex = 0;
-
-  final List<Map<String, dynamic>> _recentAlerts = [
-    {
-      'type': 'missed_medication',
-      'message': 'ناسي دواء الضغط',
-      'time': DateTime.now().subtract(const Duration(hours: 2)),
-      'isRead': false,
-    },
-    {
-      'type': 'success',
-      'message': 'أخد دواء السكر',
-      'time': DateTime.now().subtract(const Duration(hours: 3)),
-      'isRead': true,
-    },
-    {
-      'type': 'location',
-      'message': 'لسه في البيت',
-      'time': DateTime.now().subtract(const Duration(minutes: 20)),
-      'isRead': true,
-    },
-  ];
 
   @override
   void initState() {
@@ -80,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       body: Stack(
         children: [
           _buildIdleBackground(),
@@ -122,7 +113,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Idle Background ───────────────────────────
   Widget _buildIdleBackground() {
     return AnimatedBuilder(
       animation: _idleAnim,
@@ -155,8 +145,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Header ────────────────────────────────────
   Widget _buildHeader() {
+    final userAsync = ref.watch(currentUserProvider);
+    final name = userAsync.valueOrNull?.name ?? '...';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: FadeSlideIn(
@@ -166,52 +158,47 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _getGreeting(),
-                    style: AppTextStyles.bodySmall,
-                  ),
+                  Text(_getGreeting(), style: AppTextStyles.bodySmall),
                   const SizedBox(height: 4),
-                  const Text('أحمد محمد', style: AppTextStyles.headline2),
+                  Text(name, style: AppTextStyles.headline2),
                   const SizedBox(height: 2),
-                  Text(
-                    DateTime.now().toArabicDate(),
-                    style: AppTextStyles.caption,
-                  ),
+                  Text(DateTime.now().toArabicDate(), style: AppTextStyles.caption),
                 ],
               ),
             ),
-            // Notification Bell
             Stack(
               children: [
                 PressableButton(
                   onTap: () => Navigator.push(
-                    context,
-                    _slideRoute(const AlertsScreen()),
-                  ),
+                    context, _slideRoute(const AlertsScreen())),
                   child: Container(
                     width: 48, height: 48,
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surfaceOf(context),
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.divider),
+                      border: Border.all(color: AppColors.dividerOf(context)),
                     ),
                     child: const Icon(Icons.notifications_rounded,
                       color: AppColors.caregiverPrimary, size: 24),
                   ),
                 ),
-                Positioned(
-                  top: 8, right: 8,
-                  child: ScaleTransition(
-                    scale: _pulseAnim,
-                    child: Container(
-                      width: 10, height: 10,
-                      decoration: const BoxDecoration(
-                        color: AppColors.emergency,
-                        shape: BoxShape.circle,
+                Consumer(builder: (context, ref, _) {
+                  final unread = ref.watch(unresolvedAlertCountProvider);
+                  if (unread <= 0) return const SizedBox.shrink();
+                  return Positioned(
+                    top: 8, right: 8,
+                    child: ScaleTransition(
+                      scale: _pulseAnim,
+                      child: Container(
+                        width: 10, height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.emergency,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
           ],
@@ -220,8 +207,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Elderly Status Card ───────────────────────
   Widget _buildElderlyStatusCard() {
+    final medsAsync = ref.watch(myTodayMedicationsProvider);
+
+    final taken = medsAsync.valueOrNull?.where((m) => m.isTaken).length ?? 0;
+    final total = medsAsync.valueOrNull?.length ?? 0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
@@ -242,7 +233,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
         child: Row(
           children: [
-            // Idle floating avatar
             AnimatedBuilder(
               animation: _idleAnim,
               builder: (_, child) => Transform.translate(
@@ -266,7 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('حاج محمد أحمد',
+                  const Text('المسن',
                     style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600,
                       color: Colors.white)),
@@ -284,10 +274,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text('نشط — آخر ظهور منذ 20 دقيقة',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.85))),
+                      const Text('نشط',
+                        style: TextStyle(fontSize: 13, color: Colors.white70)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -295,13 +283,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                     children: [
                       _StatusPill(
                         icon: Icons.medication_rounded,
-                        label: '2/3 أدوية',
+                        label: '$taken/$total أدوية',
                         color: Colors.white,
                       ),
                       const SizedBox(width: 8),
-                      _StatusPill(
+                      const _StatusPill(
                         icon: Icons.location_on_rounded,
-                        label: 'في البيت',
+                        label: 'الموقع',
                         color: Colors.white,
                       ),
                     ],
@@ -315,8 +303,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Stats Grid ────────────────────────────────
   Widget _buildStatsGrid() {
+    final medsAsync = ref.watch(myTodayMedicationsProvider);
+    final readingsAsync = ref.watch(myLatestReadingsProvider);
+
+    final taken = medsAsync.valueOrNull?.where((m) => m.isTaken).length ?? 0;
+    final total = medsAsync.valueOrNull?.length ?? 0;
+
+    HealthModel? findLatest(String type) {
+      final readings = readingsAsync.valueOrNull ?? [];
+      final matching = readings.where((r) => r.type == type).toList()
+        ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+      return matching.isNotEmpty ? matching.first : null;
+    }
+
+    final pulse = findLatest(AppConstants.healthPulse);
+    final bp = findLatest(AppConstants.healthBloodPressure);
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
@@ -328,7 +331,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: StatCard(
               icon: Icons.medication_rounded,
               label: 'الأدوية',
-              value: '2/3',
+              value: '$taken/$total',
               color: AppColors.caregiverPrimary,
               bgColor: AppColors.caregiverPrimaryLight,
               delay: const Duration(milliseconds: 200),
@@ -339,7 +342,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: StatCard(
               icon: Icons.favorite_rounded,
               label: 'النبض',
-              value: '78',
+              value: pulse?.displayValue ?? '--',
               unit: 'bpm',
               color: AppColors.emergency,
               bgColor: AppColors.emergencyLight,
@@ -351,7 +354,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: StatCard(
               icon: Icons.speed_rounded,
               label: 'الضغط',
-              value: '120',
+              value: bp?.displayValue ?? '--',
               unit: 'mmHg',
               color: AppColors.elderlyPrimary,
               bgColor: AppColors.elderlyPrimaryLight,
@@ -363,8 +366,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Quick Actions ─────────────────────────────
+  // ── تم إصلاحها: "اتصال" كان بس haptic من غير فعل حقيقي،
+  //    "الأدوية" و"تقارير" كانوا onTap: () {} فاضيين.
   Widget _buildQuickActions() {
+    final elderlyPhoneAsync = ref.watch(_elderlyPhoneProvider);
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
@@ -382,7 +388,24 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.phone_rounded,
                   label: 'اتصال',
                   color: AppColors.caregiverPrimary,
-                  onTap: () => HapticFeedback.mediumImpact(),
+                  onTap: () async {
+                    HapticFeedback.mediumImpact();
+                    final phone = elderlyPhoneAsync.valueOrNull;
+                    if (phone == null || phone.isEmpty) {
+                      if (mounted) {
+                        context.showSnackBar(
+                          'مفيش رقم موبايل مسجل للمسن', isError: true);
+                      }
+                      return;
+                    }
+                    final uri = Uri(scheme: 'tel', path: phone);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    } else if (mounted) {
+                      context.showSnackBar(
+                        'مش قادر يفتح تطبيق الاتصال', isError: true);
+                    }
+                  },
                 ),
               ),
               const SizedBox(width: 10),
@@ -401,7 +424,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.medication_rounded,
                   label: 'الأدوية',
                   color: AppColors.elderlyPrimary,
-                  onTap: () {},
+                  onTap: () => Navigator.push(
+                    context,
+                    _slideRoute(const MedicationManagementScreen()),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -410,7 +436,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.bar_chart_rounded,
                   label: 'تقارير',
                   color: const Color(0xFF8E24AA),
-                  onTap: () {},
+                  onTap: () => Navigator.push(
+                    context,
+                    _slideRoute(const ReportsScreen()),
+                  ),
                 ),
               ),
             ],
@@ -420,8 +449,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── Recent Alerts ─────────────────────────────
   Widget _buildRecentAlerts() {
+    final alertsAsync = ref.watch(myAlertsProvider);
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
@@ -445,25 +475,56 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
           const SizedBox(height: 12),
-          StaggeredList(
-            staggerMs: 100,
-            children: _recentAlerts.map((alert) =>
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AlertTile(alert: alert),
-              ),
-            ).toList(),
+          alertsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, st) => Text('حصل خطأ: $e', style: AppTextStyles.bodySmall),
+            data: (alerts) {
+              final recent = List<AlertModel>.from(alerts)
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              final top3 = recent.take(3).toList();
+
+              if (top3.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text('مفيش تنبيهات حديثة',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary)),
+                );
+              }
+
+              return StaggeredList(
+                staggerMs: 100,
+                children: top3.map((alert) =>
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: AlertTile(
+                      alert: {
+                        'type': alert.type,
+                        'message': alert.message,
+                        'time': alert.createdAt,
+                        'isRead': alert.isRead,
+                      },
+                    ),
+                  ),
+                ).toList(),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // ── Bottom Nav ────────────────────────────────
+  // ── تم إصلاحها: الـ index كان بيفضل عالق على آخر تاب اتضغط
+  //    حتى بعد الرجوع بالـ back button. دلوقتي بيرجع "الرئيسية"
+  //    تلقائيًا بمجرد الرجوع من أي شاشة.
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceOf(context),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
@@ -479,8 +540,28 @@ class _DashboardScreenState extends State<DashboardScreen>
         onTap: (i) {
           HapticFeedback.lightImpact();
           setState(() => _currentIndex = i);
-          if (i == 1) Navigator.push(context, _slideRoute(const LocationScreen()));
-          if (i == 2) Navigator.push(context, _slideRoute(const AlertsScreen()));
+
+          Future<void>? future;
+          switch (i) {
+            case 1:
+              future = Navigator.push(context, _slideRoute(const LocationScreen()));
+              break;
+            case 2:
+              future = Navigator.push(context, _slideRoute(const AlertsScreen()));
+              break;
+            case 3:
+              future = Navigator.push(
+                context,
+                _slideRoute(
+                  const SettingsScreen(),
+                  arguments: {'role': 'caregiver'},
+                ),
+              );
+              break;
+          }
+          future?.then((_) {
+            if (mounted) setState(() => _currentIndex = 0);
+          });
         },
         items: const [
           BottomNavigationBarItem(
@@ -503,7 +584,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     return 'مساء النور';
   }
 
-  PageRoute _slideRoute(Widget page) => PageRouteBuilder(
+  PageRoute _slideRoute(Widget page, {Object? arguments}) => PageRouteBuilder(
+    settings: RouteSettings(arguments: arguments),
     pageBuilder: (_, a, b) => page,
     transitionDuration: AppConstants.animMedium,
     transitionsBuilder: (_, anim, __, child) => SlideTransition(
@@ -514,6 +596,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     ),
   );
 }
+
+// ── Provider مساعد لرقم موبايل المسن (عشان زرار الاتصال) ──
+final _elderlyPhoneProvider = FutureProvider<String?>((ref) async {
+  final elderlyId = ref.watch(activeElderlyIdProvider);
+  if (elderlyId == null) return null;
+  final user = await ref.watch(authRepoProvider).getUser(elderlyId);
+  return user?.phone;
+});
 
 // ── Status Pill ───────────────────────────────
 class _StatusPill extends StatelessWidget {

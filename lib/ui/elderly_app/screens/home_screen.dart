@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants.dart';
 import '../../../core/extensions.dart';
+import '../../../logic/providers/auth_provider.dart';
+import '../../../logic/providers/location_provider.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
@@ -16,6 +18,8 @@ import '../widgets/health_summary_card.dart';
 import 'emergency_screen.dart';
 import 'medication_screen.dart';
 import 'health_screen.dart';
+import 'memory_screen.dart';
+import '../../shared/screens/settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -26,18 +30,20 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin {
-
   // ── Idle Animation (نجوم/دوائر خلفية بتتحرك) ──
   late AnimationController _idleCtrl;
-  late Animation<double>   _idleAnim;
+  late Animation<double> _idleAnim;
 
   // ── Greeting fade ──
   late AnimationController _greetCtrl;
-  late Animation<double>   _greetFade;
+  late Animation<double> _greetFade;
 
   // ── Emergency button pulse ──
   late AnimationController _pulseCtrl;
-  late Animation<double>   _pulseScale;
+  late Animation<double> _pulseScale;
+
+  // ── Bottom Nav ──
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -64,6 +70,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     )..repeat(reverse: true);
     _pulseScale = Tween<double>(begin: 1.0, end: 1.05)
         .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
+    // ── تشغيل تتبّع الموقع الفعلي ──────────────
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _startLocationTracking());
+  }
+
+  void _startLocationTracking() {
+    final elderlyId = ref.read(authRepoProvider).currentUserId;
+    if (elderlyId == null || elderlyId.isEmpty) return;
+
+    final trackingState = ref.read(locationTrackingProvider(elderlyId));
+    if (trackingState.status == LocationTrackingStatus.tracking) return;
+
+    ref.read(locationTrackingProvider(elderlyId).notifier).startTracking();
   }
 
   @override
@@ -76,37 +96,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final elderlyId = ref.watch(authRepoProvider).currentUserId ?? '';
+    if (elderlyId.isNotEmpty) {
+      ref.listen<LocationTrackingState>(
+        locationTrackingProvider(elderlyId),
+        (previous, next) {
+          if (next.status == LocationTrackingStatus.permissionDenied &&
+              previous?.status != LocationTrackingStatus.permissionDenied) {
+            context.showSnackBar(
+              'محتاجين إذن الموقع عشان المتابعة تشتغل، فعّله من إعدادات الجهاز',
+              isError: true,
+            );
+          }
+        },
+      );
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       body: Stack(
         children: [
-          // ── Idle Background Animation ──────────────
           _buildIdleBackground(),
-
-          // ── Main Content ───────────────────────────
           SafeArea(
             child: CustomScrollView(
               slivers: [
-                // AppBar
                 SliverToBoxAdapter(child: _buildHeader()),
-
-                // Emergency Button
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
                     delay: const Duration(milliseconds: 200),
                     child: _buildEmergencyButton(),
                   ),
                 ),
-
-                // Action Buttons Grid
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
                     delay: const Duration(milliseconds: 350),
-                    child: _buildActionGrid(),
+                    child: _buildActionGrid(elderlyId),
                   ),
                 ),
-
-                // Medication Card
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
                     delay: const Duration(milliseconds: 450),
@@ -118,12 +144,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                   ),
                 ),
-
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppConstants.gapMedium),
                 ),
-
-                // Health Card
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
                     delay: const Duration(milliseconds: 550),
@@ -135,7 +158,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                   ),
                 ),
-
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 100),
                 ),
@@ -144,21 +166,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ],
       ),
-
-      // ── Bottom Navigation ──────────────────────────
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Idle Background — دوايرة بتتنفس في الخلف
-  // ════════════════════════════════════════════
   Widget _buildIdleBackground() {
     return AnimatedBuilder(
       animation: _idleAnim,
       builder: (_, __) => Stack(
         children: [
-          // دايرة كبيرة زرقاء فاتح في الكورنر
           Positioned(
             top: -60 + (_idleAnim.value * 20),
             right: -60 + (_idleAnim.value * 10),
@@ -171,7 +187,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ),
           ),
-          // دايرة تانية أصغر
           Positioned(
             top: 100 + (_idleAnim.value * -15),
             left: -40 + (_idleAnim.value * 8),
@@ -184,7 +199,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ),
           ),
-          // دايرة في الأسفل
           Positioned(
             bottom: 80 + (_idleAnim.value * 12),
             right: -30 + (_idleAnim.value * -8),
@@ -202,16 +216,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Header — تحية + صورة
-  // ════════════════════════════════════════════
+  // ── تم إصلاحها: كان فيه اسم ثابت "حاج محمد" بيظهر لحد ما بيانات
+  //    المستخدم توصل. دلوقتي: لو لسه بيحمّل أو الاسم فاضي، بيتعرض
+  //    مكان الاسم شكل هيكلي بسيط (skeleton) بدل نص وهمي. وبدل أيقونة
+  //    الشخص الثابتة في الزرار، لو المستخدم عنده صورة بروفايل بتتعرض
+  //    فعليًا.
   Widget _buildHeader() {
+    final userAsync = ref.watch(currentUserProvider);
+    final name = userAsync.valueOrNull?.name;
+    final photoUrl = userAsync.valueOrNull?.photoUrl;
+    final isLoading = userAsync.isLoading;
+
     return FadeTransition(
       opacity: _greetFade,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-          AppConstants.paddingMedium, 16,
-          AppConstants.paddingMedium, 8,
+          AppConstants.paddingMedium,
+          16,
+          AppConstants.paddingMedium,
+          8,
         ),
         child: Row(
           children: [
@@ -226,7 +249,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text('حاج محمد', style: AppTextStyles.headline2),
+                  if (isLoading && (name == null || name.isEmpty))
+                    Container(
+                      width: 120,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: AppColors.dividerOf(context),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    )
+                  else
+                    Text(
+                      (name != null && name.isNotEmpty) ? name : '',
+                      style: AppTextStyles.headline2,
+                    ),
                   const SizedBox(height: 2),
                   Text(
                     DateTime.now().toArabicDate(),
@@ -235,9 +271,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ],
               ),
             ),
-            // صورة المستخدم
             PressableButton(
-              onTap: () {},
+              onTap: () => Navigator.push(
+                context,
+                _slideRoute(
+                  const SettingsScreen(),
+                  arguments: {'role': 'elderly'},
+                ),
+              ),
               child: Container(
                 width: 56,
                 height: 56,
@@ -248,12 +289,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     color: AppColors.elderlyPrimary,
                     width: 2,
                   ),
+                  image: (photoUrl != null && photoUrl.isNotEmpty)
+                      ? DecorationImage(
+                          image: NetworkImage(photoUrl),
+                          fit: BoxFit.cover)
+                      : null,
                 ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  size: 30,
-                  color: AppColors.elderlyPrimary,
-                ),
+                child: (photoUrl == null || photoUrl.isEmpty)
+                    ? const Icon(
+                        Icons.person_rounded,
+                        size: 30,
+                        color: AppColors.elderlyPrimary,
+                      )
+                    : null,
               ),
             ),
           ],
@@ -262,9 +310,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Emergency Button
-  // ════════════════════════════════════════════
   Widget _buildEmergencyButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -282,7 +327,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               PageRouteBuilder(
                 pageBuilder: (_, a, b) => const EmergencyScreen(),
                 transitionsBuilder: (_, anim, __, child) => FadeTransition(
-                  opacity: anim, child: child,
+                  opacity: anim,
+                  child: child,
                 ),
               ),
             );
@@ -291,7 +337,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             height: AppConstants.buttonHeightLarge + 10,
             decoration: BoxDecoration(
               gradient: AppColors.emergencyGradient,
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+              borderRadius:
+                  BorderRadius.circular(AppConstants.borderRadiusLarge),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.emergency.withOpacity(0.35),
@@ -342,10 +389,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Action Grid — 4 أزرار
-  // ════════════════════════════════════════════
-  Widget _buildActionGrid() {
+  // ── تم إصلاحها: زرار "ذاكرتي" كان onTap: () {} فاضي.
+  //    دلوقتي بيفتح MemoryScreen فعليًا.
+  Widget _buildActionGrid(String elderlyId) {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
@@ -388,7 +434,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               color: AppColors.warning,
               bgColor: AppColors.warningLight,
               delay: const Duration(milliseconds: 560),
-              onTap: () {},
+              onTap: () => _showLocationStatus(elderlyId),
             ),
           ),
           const SizedBox(width: AppConstants.gapSmall),
@@ -399,7 +445,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               color: const Color(0xFF8E24AA),
               bgColor: const Color(0xFFF3E5F5),
               delay: const Duration(milliseconds: 640),
-              onTap: () {},
+              onTap: () => Navigator.push(
+                context,
+                _slideRoute(const MemoryScreen()),
+              ),
             ),
           ),
         ],
@@ -407,13 +456,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Bottom Navigation
-  // ════════════════════════════════════════════
+  void _showLocationStatus(String elderlyId) {
+    if (elderlyId.isEmpty) return;
+
+    final trackingState = ref.read(locationTrackingProvider(elderlyId));
+    String message;
+    bool isError = false;
+
+    switch (trackingState.status) {
+      case LocationTrackingStatus.tracking:
+        message = 'موقعك بيتبعت لعيلتك بشكل مستمر';
+        break;
+      case LocationTrackingStatus.permissionDenied:
+        message =
+            'محتاجين إذن الموقع عشان عيلتك تقدر تطمن عليك، فعّله من إعدادات الجهاز';
+        isError = true;
+        break;
+      case LocationTrackingStatus.error:
+        message = 'حصلت مشكلة في إرسال الموقع، هنحاول تاني';
+        isError = true;
+        break;
+      case LocationTrackingStatus.idle:
+        message = 'المتابعة مش شغالة دلوقتي، هنشغّلها تاني';
+        isError = true;
+        _startLocationTracking();
+        break;
+    }
+
+    context.showSnackBar(message, isError: isError);
+  }
+
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceOf(context),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
@@ -423,9 +499,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ],
       ),
       child: BottomNavigationBar(
-        currentIndex: 0,
+        currentIndex: _currentIndex,
         elevation: 0,
         backgroundColor: Colors.transparent,
+        onTap: (i) {
+          HapticFeedback.lightImpact();
+          setState(() => _currentIndex = i);
+
+          switch (i) {
+            case 0:
+              break;
+            case 1:
+              Navigator.push(context, _slideRoute(const MedicationScreen()))
+                  .then((_) => setState(() => _currentIndex = 0));
+              break;
+            case 2:
+              Navigator.push(context, _slideRoute(const HealthScreen()))
+                  .then((_) => setState(() => _currentIndex = 0));
+              break;
+            case 3:
+              Navigator.push(
+                context,
+                _slideRoute(
+                  const SettingsScreen(),
+                  arguments: {'role': 'elderly'},
+                ),
+              ).then((_) => setState(() => _currentIndex = 0));
+              break;
+          }
+        },
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_rounded),
@@ -448,9 +550,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ════════════════════════════════════════════
-  //  Helpers
-  // ════════════════════════════════════════════
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'صباح الخير';
@@ -458,15 +557,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return 'مساء النور';
   }
 
-  PageRoute _slideRoute(Widget page) => PageRouteBuilder(
-    pageBuilder: (_, a, b) => page,
-    transitionDuration: AppConstants.animMedium,
-    transitionsBuilder: (_, anim, __, child) => SlideTransition(
-      position: Tween<Offset>(
-        begin: const Offset(1, 0),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-      child: child,
-    ),
-  );
+  PageRoute _slideRoute(Widget page, {Object? arguments}) => PageRouteBuilder(
+        settings: RouteSettings(arguments: arguments),
+        pageBuilder: (_, a, b) => page,
+        transitionDuration: AppConstants.animMedium,
+        transitionsBuilder: (_, anim, __, child) => SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      );
 }

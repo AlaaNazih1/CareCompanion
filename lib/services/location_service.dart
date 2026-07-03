@@ -1,9 +1,12 @@
+// ══════════════════════════════════════════════
+//  lib/core/location_service.dart
+// ══════════════════════════════════════════════
+
+import 'package:care_companion/core/constants.dart';
+import 'package:care_companion/core/failures.dart';
 import 'package:geolocator/geolocator.dart';
-import '../core/constants.dart';
-import '../core/failures.dart';
 
 class LocationService {
-
   static Future<bool> requestPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
@@ -18,24 +21,27 @@ class LocationService {
     return true;
   }
 
+  // ── تم إصلاحها: desiredAccuracy كان Deprecated في geolocator 10+،
+  //    بقى لازم يتحط جوه LocationSettings بدل ما يتبعت مباشرة.
   static Future<Position> getCurrentPosition() async {
     final hasPermission = await requestPermission();
     if (!hasPermission) {
       throw const PermissionFailure(permission: 'الموقع');
     }
 
-    return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 10),
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 10),
+      ),
     );
   }
 
   static Stream<Position> getPositionStream() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy:          LocationAccuracy.high,
-        distanceFilter:    10, 
-        timeLimit:         Duration(seconds: 30),
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
       ),
     );
   }
@@ -46,9 +52,7 @@ class LocationService {
     required double endLat,
     required double endLng,
   }) {
-    return Geolocator.distanceBetween(
-      startLat, startLng, endLat, endLng,
-    );
+    return Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
   }
 
   static bool isInsideGeofence({
@@ -61,8 +65,8 @@ class LocationService {
     final distance = distanceBetween(
       startLat: currentLat,
       startLng: currentLng,
-      endLat:   centerLat,
-      endLng:   centerLng,
+      endLat: centerLat,
+      endLng: centerLng,
     );
     return distance <= radius;
   }

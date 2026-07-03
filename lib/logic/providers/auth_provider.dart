@@ -34,6 +34,14 @@ final currentUserProvider = FutureProvider<UserModel?>((ref) async {
   return ref.read(authRepoProvider).getUser(userId);
 });
 
+// ── حساب المستخدم مكتمل ولا لسه؟ ──────────────
+// بروفايل "مكتمل" يعني عنده اسم متسجل فعلاً. لو الاسم فاضي، يبقى
+// المستخدم اتحقق من رقمه بس ولسه محدّش دخل الاسم (سيناريو قفل
+// التطبيق في نص التسجيل).
+extension UserModelCompleteness on UserModel {
+  bool get hasCompletedProfile => name.trim().isNotEmpty;
+}
+
 // ── Auth Notifier ─────────────────────────────
 class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
   final IAuthRepo _repo;
@@ -66,11 +74,19 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
         otp: otp,
       );
 
+      if (cred.user == null) {
+        state = AsyncValue.error(
+          'حصل خطأ في تسجيل الدخول',
+          StackTrace.current,
+        );
+        return null;
+      }
+
       // جيب بيانات المستخدم
       UserModel? user = await _repo.getUser(cred.user!.uid);
 
-      // لو مستخدم جديد → سجله
       if (user == null) {
+        // مستخدم جديد تمامًا → سجله بالـ role اللي اختاره
         user = UserModel(
           id:        cred.user!.uid,
           name:      '',
@@ -79,6 +95,21 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
           createdAt: DateTime.now(),
         );
         await _repo.saveUser(user);
+      } else if (user.role != role) {
+        // ── تم إصلاحها: نفس رقم الموبايل مسجل بدور مختلف (كبير/مسؤول).
+        //    من غير التحقق ده كان ممكن نفس الرقم يدخل بدورين مختلفين
+        //    ويسبب لبس في البيانات (مين الكبير ومين المسؤول).
+        //    بنرفض الدخول بالدور الغلط ونوضح للمستخدم السبب.
+        final existingRoleLabel =
+            user.role == 'elderly' ? 'كبير' : 'مسؤول';
+        state = AsyncValue.error(
+          'الرقم ده مسجل بالفعل كحساب $existingRoleLabel. '
+          'سجل دخولك من نفس النوع ده، أو استخدم رقم موبايل تاني.',
+          StackTrace.current,
+        );
+        // نسجل خروج فورًا عشان مايفضلش فيه جلسة Auth معلقة بدور غلط
+        await _repo.signOut();
+        return null;
       }
 
       state = AsyncValue.data(user);

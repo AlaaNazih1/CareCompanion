@@ -1,4 +1,4 @@
-
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants.dart';
@@ -15,29 +15,35 @@ class FirebaseAuthSource {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<String> sendOTP(String phone) async {
-    try {
-      String verificationId = '';
+    final completer = Completer<String>();
 
+    try {
       await _auth.verifyPhoneNumber(
         phoneNumber: phone,
         timeout: const Duration(seconds: 60),
 
         verificationCompleted: (PhoneAuthCredential cred) async {
+
           await _auth.signInWithCredential(cred);
+          if (!completer.isCompleted) completer.complete('');
         },
 
         verificationFailed: (FirebaseAuthException e) {
-          throw AuthFailure(message: _mapError(e.code));
+          if (!completer.isCompleted) {
+            completer.completeError(AuthFailure(message: _mapError(e.code)));
+          }
         },
 
         codeSent: (String vId, int? resendToken) {
-          verificationId = vId;
+          if (!completer.isCompleted) completer.complete(vId);
         },
 
-        codeAutoRetrievalTimeout: (_) {},
+        codeAutoRetrievalTimeout: (String vId) {
+          if (!completer.isCompleted) completer.complete(vId);
+        },
       );
 
-      return verificationId;
+      return await completer.future;
     } on AuthFailure {
       rethrow;
     } catch (e) {

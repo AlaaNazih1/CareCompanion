@@ -2,9 +2,12 @@
 //  lib/logic/providers/location_provider.dart
 // ══════════════════════════════════════════════
 
+import 'dart:async';
+
+import 'package:care_companion/services/location_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../core/failures.dart';
-import '../../core/network_info.dart';
 import '../../data/models/location_model.dart';
 import '../../data/sources/remote/firebase_location_source.dart';
 import '../../data/repositories/location_repo_impl.dart';
@@ -20,14 +23,21 @@ final locationRepoProvider = Provider<ILocationRepo>((ref) => LocationRepoImpl(
       network: ref.read(networkInfoProvider),
     ));
 
-// ── Location Stream (real-time) ───────────────
-final locationStreamProvider = StreamProvider<LocationModel?>((ref) {
-  final userId = ref.read(authRepoProvider).currentUserId;
-  if (userId == null) return const Stream.empty();
-  return ref.read(locationRepoProvider).watchLocation(userId);
+
+final locationStreamProvider =
+    StreamProvider.family<LocationModel?, String>((ref, elderlyId) {
+  if (elderlyId.isEmpty) return const Stream.empty();
+  return ref.read(locationRepoProvider).watchLocation(elderlyId);
 });
 
-// ── Location Notifier ─────────────────────────
+// ── Geofence Data (المنطقة الآمنة) ────────────
+final geofenceProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, elderlyId) {
+  if (elderlyId.isEmpty) return Future.value(null);
+  return ref.read(locationRepoProvider).getGeofence(elderlyId);
+});
+
+// ── Location Notifier (يُستخدم من شاشات الـ Caregiver) ─
 class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
   final ILocationRepo _repo;
   final String        _elderlyId;
@@ -46,7 +56,7 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
     }
   }
 
-  // تحديث الموقع
+  // تحديث الموقع (بيتحسب فيها هل الكبير جوه المنطقة الآمنة ولا لأ)
   Future<void> updateLocation({
     required double latitude,
     required double longitude,
@@ -54,26 +64,17 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
     String? address,
   }) async {
     try {
-      // هل الكبير جوه المنطقة الآمنة؟
       final geofence = await _repo.getGeofence(_elderlyId);
-      bool isInside  = true;
+      bool isInside = true;
 
       if (geofence != null) {
-        final location = LocationModel(
-          id:           _elderlyId,
-          elderlyId:    _elderlyId,
-          latitude:     latitude,
-          longitude:    longitude,
-          accuracy:     accuracy,
-          address:      address,
-          isInsideZone: true,
-          recordedAt:   DateTime.now(),
+        final distance = LocationService.distanceBetween(
+          startLat: latitude,
+          startLng: longitude,
+          endLat:   (geofence['centerLat'] as num).toDouble(),
+          endLng:   (geofence['centerLng'] as num).toDouble(),
         );
-        final distance = location.distanceTo(
-          geofence['centerLat'],
-          geofence['centerLng'],
-        );
-        isInside = distance <= (geofence['radiusMeters'] ?? 200.0);
+        isInside = distance <= ((geofence['radiusMeters'] as num?) ?? 200.0);
       }
 
       final location = LocationModel(
@@ -115,8 +116,115 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
   Future<void> refresh() => _load();
 }
 
-final locationNotifierProvider =
-    StateNotifierProvider<LocationNotifier, AsyncValue<LocationModel?>>((ref) {
-  final userId = ref.read(authRepoProvider).currentUserId ?? '';
-  return LocationNotifier(ref.read(locationRepoProvider), userId);
+final locationNotifierProvider = StateNotifierProvider.family<
+    LocationNotifier, AsyncValue<LocationModel?>, String>((ref, elderlyId) {
+  return LocationNotifier(ref.read(locationRepoProvider), elderlyId);
+});
+
+// ══════════════════════════════════════════════
+//  تتبّع موقع الكبير الفعلي (يُستخدم في Elderly App)
+// ══════════════════════════════════════════════
+//
+// ده المسؤول عن قراءة الـ GPS من موبايل الكبير فعليًا وبعت كل تحديث
+// لـ Firestore. من غيره شاشة الـ Caregiver هتفضل فاضية حتى لو كل
+// الـ providers التانية شغالة صح، لأن محدش بيكتب بيانات أصلًا.
+
+enum LocationTrackingStatus { idle, permissionDenied, tracking, error }
+
+class LocationTrackingState {
+  final LocationTrackingStatus status;
+  final String? errorMessage;
+
+  const LocationTrackingState({required this.status, this.errorMessage});
+
+  const LocationTrackingState.idle() : this(status: LocationTrackingStatus.idle);
+  const LocationTrackingState.tracking()
+      : this(status: LocationTrackingStatus.tracking);
+  const LocationTrackingState.permissionDenied()
+      : this(status: LocationTrackingStatus.permissionDenied);
+  const LocationTrackingState.error(String message)
+      : this(status: LocationTrackingStatus.error, errorMessage: message);
+}
+
+class LocationTrackingNotifier extends StateNotifier<LocationTrackingState> {
+  final ILocationRepo _repo;
+  final String _elderlyId;
+  StreamSubscription<Position>? _positionSub;
+
+  LocationTrackingNotifier(this._repo, this._elderlyId)
+      : super(const LocationTrackingState.idle());
+
+  Future<void> startTracking() async {
+    final hasPermission = await LocationService.requestPermission();
+    if (!hasPermission) {
+      state = const LocationTrackingState.permissionDenied();
+      return;
+    }
+
+    // نبعت أول قراءة فورًا بدل ما ننتظر أول تحرك محسوس (distanceFilter)
+    try {
+      final first = await LocationService.getCurrentPosition();
+      await _handlePosition(first);
+    } catch (_) {
+      // لو فشلت أول قراءة نكمل ونعتمد على الـ stream
+    }
+
+    await _positionSub?.cancel();
+    _positionSub = LocationService.getPositionStream().listen(
+      _handlePosition,
+      onError: (e) {
+        state = LocationTrackingState.error(e.toString());
+      },
+    );
+
+    state = const LocationTrackingState.tracking();
+  }
+
+  Future<void> _handlePosition(Position position) async {
+    try {
+      final geofence = await _repo.getGeofence(_elderlyId);
+      bool isInside = true;
+
+      if (geofence != null) {
+        final distance = LocationService.distanceBetween(
+          startLat: position.latitude,
+          startLng: position.longitude,
+          endLat:   (geofence['centerLat'] as num).toDouble(),
+          endLng:   (geofence['centerLng'] as num).toDouble(),
+        );
+        isInside = distance <= ((geofence['radiusMeters'] as num?) ?? 200.0);
+      }
+
+      await _repo.saveLocation(LocationModel(
+        id:           _elderlyId,
+        elderlyId:    _elderlyId,
+        latitude:     position.latitude,
+        longitude:    position.longitude,
+        accuracy:     position.accuracy,
+        isInsideZone: isInside,
+        recordedAt:   DateTime.now(),
+      ));
+    } on Failure catch (e) {
+      state = LocationTrackingState.error(e.message);
+    } catch (e) {
+      state = LocationTrackingState.error(e.toString());
+    }
+  }
+
+  void stopTracking() {
+    _positionSub?.cancel();
+    _positionSub = null;
+    state = const LocationTrackingState.idle();
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+}
+
+final locationTrackingProvider = StateNotifierProvider.family<
+    LocationTrackingNotifier, LocationTrackingState, String>((ref, elderlyId) {
+  return LocationTrackingNotifier(ref.read(locationRepoProvider), elderlyId);
 });

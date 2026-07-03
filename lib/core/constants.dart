@@ -1,9 +1,8 @@
-
 class AppConstants {
   AppConstants._();
 
-  static const String elderlyAppName   = 'رعايتي';
-  static const String caregiverAppName = 'متابعة والدي';
+  static const String elderlyAppName   = 'Care Companion';
+  static const String caregiverAppName = 'Care Companion';
 
   static const String usersCollection         = 'users';
   static const String medicationsCollection   = 'medications';

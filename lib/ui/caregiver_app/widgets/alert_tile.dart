@@ -11,8 +11,13 @@ import '../../shared/animations/app_animations.dart';
 
 class AlertTile extends StatelessWidget {
   final Map<String, dynamic> alert;
+  final VoidCallback? onTap;
 
-  const AlertTile({super.key, required this.alert});
+  const AlertTile({
+    super.key,
+    required this.alert,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,14 +28,14 @@ class AlertTile extends StatelessWidget {
     final icon    = _iconForType(type);
 
     return PressableButton(
-      onTap: () {},
+      onTap: onTap ?? () {},
       child: Container(
         padding: const EdgeInsets.all(AppConstants.paddingSmall),
         decoration: BoxDecoration(
-          color: isRead ? AppColors.surface : color.withOpacity(0.05),
+          color: isRead ? AppColors.surfaceOf(context) : color.withOpacity(0.05),
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
           border: Border.all(
-            color: isRead ? AppColors.divider : color.withOpacity(0.3)),
+            color: isRead ? AppColors.dividerOf(context) : color.withOpacity(0.3)),
         ),
         child: Row(
           children: [
@@ -49,12 +54,14 @@ class AlertTile extends StatelessWidget {
                 children: [
                   Text(alert['message'],
                     style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimaryOf(context),
                       fontWeight: isRead
                         ? FontWeight.w400
                         : FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(time.toArabicRelative(),
-                    style: AppTextStyles.caption),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textHintOf(context))),
                 ],
               ),
             ),
@@ -74,23 +81,23 @@ class AlertTile extends StatelessWidget {
 
   Color _colorForType(String type) {
     switch (type) {
-      case 'emergency':        return AppColors.emergency;
-      case 'missed_medication':return AppColors.warning;
-      case 'fall':             return AppColors.emergency;
-      case 'success':          return AppColors.success;
-      case 'location':         return AppColors.caregiverPrimary;
-      default:                 return AppColors.textSecondary;
+      case 'emergency':         return AppColors.emergency;
+      case 'missed_medication': return AppColors.warning;
+      case 'fall':              return AppColors.emergency;
+      case 'success':           return AppColors.success;
+      case 'location':          return AppColors.caregiverPrimary;
+      default:                  return AppColors.textSecondary;
     }
   }
 
   IconData _iconForType(String type) {
     switch (type) {
-      case 'emergency':        return Icons.warning_rounded;
-      case 'missed_medication':return Icons.medication_rounded;
-      case 'fall':             return Icons.personal_injury_rounded;
-      case 'success':          return Icons.check_circle_rounded;
-      case 'location':         return Icons.location_on_rounded;
-      default:                 return Icons.notifications_rounded;
+      case 'emergency':         return Icons.warning_rounded;
+      case 'missed_medication': return Icons.medication_rounded;
+      case 'fall':              return Icons.personal_injury_rounded;
+      case 'success':           return Icons.check_circle_rounded;
+      case 'location':          return Icons.location_on_rounded;
+      default:                  return Icons.notifications_rounded;
     }
   }
 }

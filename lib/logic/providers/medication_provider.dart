@@ -1,136 +1,70 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/repositories/medication_repo_impl.dart';
+import '../../data/sources/remote/firebase_medication.dart';
 import '../../data/models/medication_model.dart';
+import '../repositories/i_medication_repo.dart';
 import '../use_cases/track_medication.dart';
+import 'common_providers.dart';
 
-class MedicationProvider extends ChangeNotifier {
-  final TrackMedicationUseCase _useCase;
+final firebaseMedicationSourceProvider =
+    Provider<FirebaseMedicationSource>((ref) => FirebaseMedicationSource());
 
-  MedicationProvider(this._useCase);
+final medicationRepoProvider = Provider<IMedicationRepository>((ref) {
+  return MedicationRepositoryImpl(
+    remote: ref.watch(firebaseMedicationSourceProvider),
+  );
+});
 
-  bool _isLoading = false;
-  String? _error;
-  bool _disposed = false;
+final trackMedicationUseCaseProvider = Provider<TrackMedicationUseCase>((ref) {
+  return TrackMedicationUseCase(ref.watch(medicationRepoProvider));
+});
 
-  List<MedicationModel> _medications = [];
-  List<MedicationModel> _todayMedications = [];
+/// كل أدوية المسن — أي elderlyId يتبعت له
+final medicationsProvider =
+    StreamProvider.family<List<MedicationModel>, String>((ref, elderlyId) {
+  return ref.watch(trackMedicationUseCaseProvider).watchMedications(elderlyId);
+});
 
-  MedicationModel? _selectedMedication;
+/// أدوية اليوم بس — أي elderlyId يتبعت له
+final todayMedicationsProvider =
+    StreamProvider.family<List<MedicationModel>, String>((ref, elderlyId) {
+  return ref
+      .watch(trackMedicationUseCaseProvider)
+      .watchTodayMedications(elderlyId);
+});
 
-  StreamSubscription<List<MedicationModel>>? _medicationsSubscription;
-  StreamSubscription<List<MedicationModel>>? _todaySubscription;
+/// نسخة مربوطة تلقائيًا بالمستخدم الحالي (استخدمها في الشاشات مباشرة)
+final myTodayMedicationsProvider = StreamProvider<List<MedicationModel>>((ref) {
+  final elderlyId = ref.watch(activeElderlyIdProvider);
+  if (elderlyId == null) return const Stream.empty();
+  return ref
+      .watch(trackMedicationUseCaseProvider)
+      .watchTodayMedications(elderlyId);
+});
 
-  //================== Getters ==================
+final myAllMedicationsProvider = StreamProvider<List<MedicationModel>>((ref) {
+  final elderlyId = ref.watch(activeElderlyIdProvider);
+  if (elderlyId == null) return const Stream.empty();
+  return ref.watch(trackMedicationUseCaseProvider).watchMedications(elderlyId);
+});
 
-  bool get isLoading => _isLoading;
-
-  String? get error => _error;
-
-  List<MedicationModel> get medications => List.unmodifiable(_medications);
-
-  List<MedicationModel> get todayMedications =>
-      List.unmodifiable(_todayMedications);
-
-  MedicationModel? get selectedMedication => _selectedMedication;
-
-  //================== Private Helpers ==================
-
-  
-  void _safeNotify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    _isLoading = true;
-    _error = null;
-    _safeNotify();
-
-    try {
-      await action();
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      _safeNotify();
-    }
-  }
-
-  //================== Streams ==================
-
-  Future<void> watchMedications(String elderlyId) async {
-    await _medicationsSubscription?.cancel();
-
-    _medicationsSubscription = _useCase
-        .watchMedications(elderlyId)
-        .listen(
-          (data) {
-            _medications = data;
-            _safeNotify();
-          },
-          onError: (error) {
-            _error = error.toString();
-            _safeNotify();
-          },
-        );
-  }
-
-  Future<void> watchTodayMedications(String elderlyId) async {
-    await _todaySubscription?.cancel();
-
-    _todaySubscription = _useCase
-        .watchTodayMedications(elderlyId)
-        .listen(
-          (data) {
-            _todayMedications = data;
-            _safeNotify();
-          },
-          onError: (error) {
-            _error = error.toString();
-            _safeNotify();
-          },
-        );
-  }
-
-  //================== CRUD ==================
-
-  Future<void> addMedication(MedicationModel medication) {
-    return _run(() => _useCase.addMedication(medication));
-  }
-
-  Future<void> updateMedication(MedicationModel medication) {
-    return _run(() => _useCase.updateMedication(medication));
-  }
-
-  Future<void> deleteMedication(String medicationId) {
-    return _run(() => _useCase.deleteMedication(medicationId));
-  }
-
-  Future<void> markAsTaken(String medicationId) {
-    return _run(() => _useCase.markAsTaken(medicationId));
-  }
-
-  //================== Selected Medication ==================
-
-  Future<void> loadMedication(String medicationId) {
-    return _run(() async {
-      _selectedMedication = await _useCase.getMedication(medicationId);
-    });
-  }
-
-  void clearSelectedMedication() {
-    _selectedMedication = null;
-    _safeNotify();
-  }
-
-  //================== Dispose ==================
-
+class MedicationActionsNotifier extends Notifier<void> {
   @override
-  void dispose() {
-    _disposed = true;
-    _medicationsSubscription?.cancel();
-    _todaySubscription?.cancel();
-    super.dispose();
-  }
+  void build() {}
+
+  Future<void> markAsTaken(String medicationId) =>
+      ref.read(trackMedicationUseCaseProvider).markAsTaken(medicationId);
+
+  Future<MedicationModel> addMedication(MedicationModel med) =>
+      ref.read(trackMedicationUseCaseProvider).addMedication(med);
+
+  Future<void> deleteMedication(String id) =>
+      ref.read(trackMedicationUseCaseProvider).deleteMedication(id);
+
+  Future<void> updateMedication(MedicationModel med) =>
+      ref.read(trackMedicationUseCaseProvider).updateMedication(med);
 }
+
+final medicationActionsProvider =
+    NotifierProvider<MedicationActionsNotifier, void>(
+        MedicationActionsNotifier.new);

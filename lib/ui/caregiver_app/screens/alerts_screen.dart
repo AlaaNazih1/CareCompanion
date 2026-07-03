@@ -2,67 +2,31 @@
 //  lib/ui/caregiver_app/screens/alerts_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:care_companion/logic/providers/alert_provider.dart';
 import 'package:care_companion/ui/shared/widgets/app_widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants.dart';
+import '../../../data/models/alert_model.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
 import '../widgets/alert_tile.dart';
 
-class AlertsScreen extends StatefulWidget {
+class AlertsScreen extends ConsumerStatefulWidget {
   const AlertsScreen({super.key});
 
   @override
-  State<AlertsScreen> createState() => _AlertsScreenState();
+  ConsumerState<AlertsScreen> createState() => _AlertsScreenState();
 }
 
-class _AlertsScreenState extends State<AlertsScreen>
+class _AlertsScreenState extends ConsumerState<AlertsScreen>
     with SingleTickerProviderStateMixin {
 
   late AnimationController _tabCtrl;
   int _selectedFilter = 0;
 
   final List<String> _filters = ['الكل', 'طوارئ', 'أدوية', 'موقع'];
-
-  final List<Map<String, dynamic>> _alerts = [
-    {
-      'type': 'emergency',
-      'message': 'ضغط زرار الطوارئ',
-      'time': DateTime.now().subtract(const Duration(hours: 1)),
-      'isRead': false,
-    },
-    {
-      'type': 'missed_medication',
-      'message': 'ناسي دواء الضغط الساعة 2',
-      'time': DateTime.now().subtract(const Duration(hours: 2)),
-      'isRead': false,
-    },
-    {
-      'type': 'success',
-      'message': 'أخد دواء السكر',
-      'time': DateTime.now().subtract(const Duration(hours: 3)),
-      'isRead': true,
-    },
-    {
-      'type': 'location',
-      'message': 'خرج من المنطقة الآمنة',
-      'time': DateTime.now().subtract(const Duration(hours: 5)),
-      'isRead': true,
-    },
-    {
-      'type': 'location',
-      'message': 'رجع للبيت',
-      'time': DateTime.now().subtract(const Duration(hours: 4, minutes: 30)),
-      'isRead': true,
-    },
-    {
-      'type': 'missed_medication',
-      'message': 'ناسي دواء الضغط الصبح',
-      'time': DateTime.now().subtract(const Duration(days: 1)),
-      'isRead': true,
-    },
-  ];
 
   @override
   void initState() {
@@ -76,41 +40,43 @@ class _AlertsScreenState extends State<AlertsScreen>
   @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
 
-  List<Map<String, dynamic>> get _filteredAlerts {
-    if (_selectedFilter == 0) return _alerts;
-    final types = ['', 'emergency', 'missed_medication', 'location'];
-    return _alerts
-        .where((a) => a['type'] == types[_selectedFilter])
-        .toList();
+  List<AlertModel> _filtered(List<AlertModel> alerts) {
+    if (_selectedFilter == 0) return alerts;
+    const types = ['', AppConstants.alertEmergency,
+      AppConstants.alertMissedMedication, AppConstants.alertGeofence];
+    return alerts.where((a) => a.type == types[_selectedFilter]).toList();
   }
-
-  int get _unreadCount =>
-      _alerts.where((a) => a['isRead'] == false).length;
 
   @override
   Widget build(BuildContext context) {
+    final alertsAsync = ref.watch(myAlertsProvider);
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       appBar: AppBar(
         backgroundColor: AppColors.caregiverPrimary,
         title: Row(
           children: [
             const Text('التنبيهات'),
-            if (_unreadCount > 0) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.emergency,
-                  borderRadius: BorderRadius.circular(12),
+            Consumer(builder: (context, ref, _) {
+              final unread = ref.watch(unresolvedAlertCountProvider);
+              if (unread <= 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.emergency,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('$unread جديد',
+                    style: const TextStyle(
+                      fontSize: 12, color: Colors.white,
+                      fontWeight: FontWeight.w500)),
                 ),
-                child: Text('$_unreadCount جديد',
-                  style: const TextStyle(
-                    fontSize: 12, color: Colors.white,
-                    fontWeight: FontWeight.w500)),
-              ),
-            ],
+              );
+            }),
           ],
         ),
         leading: IconButton(
@@ -119,7 +85,7 @@ class _AlertsScreenState extends State<AlertsScreen>
         ),
         actions: [
           TextButton(
-            onPressed: _markAllRead,
+            onPressed: () => _markAllRead(alertsAsync.value ?? []),
             child: const Text('قراءة الكل',
               style: TextStyle(color: Colors.white, fontSize: 14)),
           ),
@@ -127,44 +93,56 @@ class _AlertsScreenState extends State<AlertsScreen>
       ),
       body: Column(
         children: [
-          // Filter Tabs
-          FadeSlideIn(
-            child: _buildFilterTabs(),
-          ),
-
-          // Alerts List
+          FadeSlideIn(child: _buildFilterTabs(context)),
           Expanded(
-            child: _filteredAlerts.isEmpty
-              ? const EmptyStateWidget(
-                  title: 'مفيش تنبيهات',
-                  subtitle: 'كل حاجة تمام!',
-                  icon: Icons.notifications_off_rounded,
-                )
-              : ListView.builder(
+            child: alertsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Center(
+                child: Text('حصل خطأ: $e', style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimaryOf(context)))),
+              data: (alerts) {
+                final filtered = _filtered(alerts);
+                if (filtered.isEmpty) {
+                  return const EmptyStateWidget(
+                    title: 'مفيش تنبيهات',
+                    subtitle: 'كل حاجة تمام!',
+                    icon: Icons.notifications_off_rounded,
+                  );
+                }
+                return ListView.builder(
                   padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  itemCount: _filteredAlerts.length,
+                  itemCount: filtered.length,
                   itemBuilder: (_, i) => FadeSlideIn(
                     delay: Duration(milliseconds: i * 60),
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: AlertTile(alert: _filteredAlerts[i]),
+                      child: AlertTile(
+                        alert: {
+                          'type': filtered[i].type,
+                          'message': filtered[i].message,
+                          'time': filtered[i].createdAt,
+                          'isRead': filtered[i].isRead,
+                        },
+                        onTap: () => _onAlertTap(filtered[i]),
+                      ),
                     ),
                   ),
-                ),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterTabs() {
+  Widget _buildFilterTabs(BuildContext context) {
     return Container(
       height: 50,
-      color: AppColors.surface,
+      color: AppColors.surfaceOf(context),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         itemCount: _filters.length,
         itemBuilder: (_, i) => Padding(
           padding: const EdgeInsets.only(left: 8),
@@ -172,17 +150,16 @@ class _AlertsScreenState extends State<AlertsScreen>
             onTap: () => setState(() => _selectedFilter = i),
             child: AnimatedContainer(
               duration: AppConstants.animFast,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               decoration: BoxDecoration(
                 color: _selectedFilter == i
                   ? AppColors.caregiverPrimary
-                  : AppColors.background,
+                  : AppColors.bg(context),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: _selectedFilter == i
                     ? AppColors.caregiverPrimary
-                    : AppColors.divider),
+                    : AppColors.dividerOf(context)),
               ),
               child: Text(_filters[i],
                 style: TextStyle(
@@ -190,7 +167,7 @@ class _AlertsScreenState extends State<AlertsScreen>
                   fontWeight: FontWeight.w500,
                   color: _selectedFilter == i
                     ? Colors.white
-                    : AppColors.textSecondary)),
+                    : AppColors.textSecondaryOf(context))),
             ),
           ),
         ),
@@ -198,11 +175,16 @@ class _AlertsScreenState extends State<AlertsScreen>
     );
   }
 
-  void _markAllRead() {
-    setState(() {
-      for (final alert in _alerts) {
-        alert['isRead'] = true;
-      }
-    });
+  Future<void> _onAlertTap(AlertModel alert) async {
+    if (!alert.isRead) {
+      await ref.read(alertNotifierProvider.notifier).markAsRead(alert.id);
+    }
+  }
+
+  Future<void> _markAllRead(List<AlertModel> alerts) async {
+    final notifier = ref.read(alertNotifierProvider.notifier);
+    for (final a in alerts.where((a) => !a.isRead)) {
+      await notifier.markAsRead(a.id);
+    }
   }
 }

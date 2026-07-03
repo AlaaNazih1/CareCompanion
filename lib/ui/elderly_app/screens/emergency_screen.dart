@@ -2,25 +2,31 @@
 //  lib/ui/elderly_app/screens/emergency_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:care_companion/logic/providers/alert_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/constants.dart';
+import '../../../data/models/alert_model.dart';
+import '../../../logic/providers/common_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
 
-class EmergencyScreen extends StatefulWidget {
+class EmergencyScreen extends ConsumerStatefulWidget {
   const EmergencyScreen({super.key});
 
   @override
-  State<EmergencyScreen> createState() => _EmergencyScreenState();
+  ConsumerState<EmergencyScreen> createState() => _EmergencyScreenState();
 }
 
-class _EmergencyScreenState extends State<EmergencyScreen>
+class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
     with TickerProviderStateMixin {
 
   // ── States ────────────────────────────────────
   bool _isActivated = false;
+  bool _isSending   = false;
   int  _countdown   = 5;
 
   // ── Animations ────────────────────────────────
@@ -33,7 +39,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
   late Animation<double> _ripple2;
   late Animation<double> _ripple3;
   late Animation<double> _pulseScale;
-  late Animation<Color?> _bgColor;
+  Animation<Color?>? _bgColor;
 
   @override
   void initState() {
@@ -77,16 +83,23 @@ class _EmergencyScreenState extends State<EmergencyScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _bgColor = ColorTween(
-      begin: AppColors.background,
-      end: const Color(0xFFFFF0F0),
-    ).animate(CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut));
 
     // Countdown controller
     _countCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     );
+  }
+
+  // ── ColorTween محتاج الـ context عشان يعرف لون الخلفية
+  //    الافتراضي (لايت/دارك)، فبنبنيه هنا بدل initState.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bgColor = ColorTween(
+      begin: AppColors.bg(context),
+      end: const Color(0xFFFFF0F0),
+    ).animate(CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -108,13 +121,14 @@ class _EmergencyScreenState extends State<EmergencyScreen>
     // Countdown
     for (int i = 5; i >= 0; i--) {
       if (!mounted) return;
+      if (!_isActivated) return; // اتلغى في نص العد
       setState(() => _countdown = i);
       HapticFeedback.mediumImpact();
       await Future.delayed(const Duration(seconds: 1));
     }
 
     // بعت الـ alert
-    if (mounted) _sendAlert();
+    if (mounted && _isActivated) _sendAlert();
   }
 
   void _cancelEmergency() {
@@ -127,35 +141,108 @@ class _EmergencyScreenState extends State<EmergencyScreen>
     _bgCtrl.reverse();
   }
 
-  void _sendAlert() {
-    // TODO: استدعاء الـ use case
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('تم إرسال طلب المساعدة للابن!',
-          style: TextStyle(fontSize: 16)),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+  Future<void> _sendAlert() async {
+    setState(() => _isSending = true);
+
+    final elderlyId = ref.read(activeElderlyIdProvider);
+    if (elderlyId == null) {
+      if (mounted) {
+        setState(() {
+          _isSending   = false;
+          _isActivated = false;
+          _countdown   = 5;
+        });
+        _bgCtrl.reverse();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('مفيش مستخدم مسجل دخول')));
+      }
+      return;
+    }
+
+    // حاول تجيب الموقع، من غير ما توقف الإرسال لو فشل
+    double? lat;
+    double? lng;
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission != LocationPermission.deniedForever &&
+          permission != LocationPermission.denied) {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        ).timeout(const Duration(seconds: 5));
+        lat = pos.latitude;
+        lng = pos.longitude;
+      }
+    } catch (_) {
+      // كمل من غير موقع لو فشل جلبه
+    }
+
+    try {
+      final alert = AlertModel(
+        id: '',
+        elderlyId: elderlyId,
+        caregiverId: '', // TODO: هات caregiverId من UserModel لو متاح
+        type: AppConstants.alertEmergency,
+        message: 'ضغط زرار الطوارئ',
+        latitude: lat,
+        longitude: lng,
+        isRead: false,
+        createdAt: DateTime.now(),
+      );
+
+      await ref.read(alertNotifierProvider.notifier).sendAlert(alert);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('تم إرسال طلب المساعدة للابن!',
+              style: TextStyle(fontSize: 16)),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إرسال طلب المساعدة: $e'),
+            backgroundColor: AppColors.emergency,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending   = false;
+          _isActivated = false;
+          _countdown   = 5;
+        });
+        _bgCtrl.reverse();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _bgColor,
+      animation: _bgColor ?? _bgCtrl,
       builder: (_, __) => Scaffold(
-        backgroundColor: _bgColor.value,
+        backgroundColor: _bgColor?.value ?? AppColors.bg(context),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_ios_rounded,
+              color: AppColors.textPrimaryOf(context)),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('الطوارئ',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 20,
+          title: Text('الطوارئ',
+            style: TextStyle(color: AppColors.textPrimaryOf(context), fontSize: 20,
               fontWeight: FontWeight.w600)),
         ),
         body: SafeArea(
@@ -172,39 +259,48 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                         key: const ValueKey('activated'),
                         children: [
                           Text(
-                            'جاري الإرسال خلال',
+                            _isSending ? 'جاري الإرسال...' : 'جاري الإرسال خلال',
                             style: AppTextStyles.bodyLarge.copyWith(
                               color: AppColors.emergency),
                           ),
                           const SizedBox(height: 8),
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 1, end: 0),
-                            duration: const Duration(seconds: 1),
-                            builder: (_, v, __) => Text(
-                              '$_countdown',
-                              style: const TextStyle(
-                                fontSize: 64,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.emergency,
+                          if (!_isSending)
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 1, end: 0),
+                              duration: const Duration(seconds: 1),
+                              builder: (_, v, __) => Text(
+                                '$_countdown',
+                                style: const TextStyle(
+                                  fontSize: 64,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.emergency,
+                                ),
                               ),
+                            )
+                          else
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: CircularProgressIndicator(
+                                color: AppColors.emergency),
                             ),
-                          ),
-                          Text(
-                            'ثواني...',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              color: AppColors.emergency),
-                          ),
+                          if (!_isSending)
+                            Text(
+                              'ثواني...',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: AppColors.emergency),
+                            ),
                         ],
                       )
                     : Column(
                         key: const ValueKey('idle'),
                         children: [
                           Text('اضغط للطوارئ',
-                            style: AppTextStyles.headline2),
+                            style: AppTextStyles.headline2.copyWith(
+                              color: AppColors.textPrimaryOf(context))),
                           const SizedBox(height: 8),
                           Text('سيتم إرسال موقعك للابن فوراً',
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textSecondary)),
+                              color: AppColors.textSecondaryOf(context))),
                         ],
                       ),
                 ),
@@ -241,7 +337,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                         scale: _pulseScale,
                         child: PressableButton(
                           scaleDown: 0.92,
-                          onTap: _onEmergencyPressed,
+                          onTap: _isSending ? () {} : _onEmergencyPressed,
                           child: Container(
                             width: 180,
                             height: 180,
@@ -321,7 +417,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
               const Spacer(),
 
               // ── Cancel Button ────────────────────
-              if (_isActivated)
+              if (_isActivated && !_isSending)
                 FadeSlideIn(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -332,7 +428,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                         width: double.infinity,
                         height: AppConstants.buttonHeightMedium,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: AppColors.surfaceOf(context),
                           borderRadius: BorderRadius.circular(
                             AppConstants.borderRadiusMedium),
                           border: Border.all(color: AppColors.emergency),

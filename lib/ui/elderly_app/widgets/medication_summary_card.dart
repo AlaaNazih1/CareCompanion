@@ -41,7 +41,7 @@ class _MedicationSummaryCardState extends State<MedicationSummaryCard>
       animation: _breathAnim,
       builder: (_, child) => Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surfaceOf(context),
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
           border: Border.all(
             color: AppColors.elderlyPrimary
@@ -81,7 +81,8 @@ class _MedicationSummaryCardState extends State<MedicationSummaryCard>
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Text('أدوية اليوم', style: AppTextStyles.headline3),
+                Text('أدوية اليوم', style: AppTextStyles.headline3.copyWith(
+                  color: AppColors.textPrimaryOf(context))),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -132,6 +133,8 @@ class _MedicationSummaryCardState extends State<MedicationSummaryCard>
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
+                            // ── لون تابت مقصود هنا: خلفية elderlyPrimaryLight
+                            //    ثابتة بصريًا في اللايت والدارك (كارت تنبيه)
                             color: AppColors.textPrimary,
                           ),
                         ),
@@ -198,7 +201,8 @@ class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
           children: [
             Text(
               'أخدت ${(_anim.value * 3).round()} من 3 أدوية',
-              style: AppTextStyles.bodySmall,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondaryOf(context)),
             ),
             Text(
               '${(_anim.value * 100).round()}%',
@@ -216,7 +220,7 @@ class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
           child: LinearProgressIndicator(
             value: _anim.value,
             minHeight: 10,
-            backgroundColor: AppColors.divider,
+            backgroundColor: AppColors.dividerOf(context),
             valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
           ),
         ),

@@ -14,9 +14,9 @@ class HealthSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceOf(context),
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: AppColors.dividerOf(context)),
       ),
       padding: const EdgeInsets.all(AppConstants.paddingMedium),
       child: Column(
@@ -37,7 +37,8 @@ class HealthSummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text('آخر قراءات صحية', style: AppTextStyles.headline3),
+              Text('آخر قراءات صحية', style: AppTextStyles.headline3.copyWith(
+                color: AppColors.textPrimaryOf(context))),
             ],
           ),
           const SizedBox(height: 14),
@@ -140,15 +141,16 @@ class _HealthStatItemState extends State<_HealthStatItem>
             ),
             Text(
               widget.unit,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 10, color: AppColors.textSecondaryOf(context)),
             ),
             const SizedBox(height: 2),
             Text(
               widget.label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                color: AppColors.textSecondaryOf(context),
               ),
             ),
           ],

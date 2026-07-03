@@ -1,125 +1,55 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/repositories/health_repo_impl.dart';
+import '../../data/sources/remote/firebase_health.dart';
 import '../../data/models/health_model.dart';
+import '../repositories/i_health_repo.dart';
 import '../use_cases/monitor_health.dart';
+import 'common_providers.dart';
 
-class HealthProvider extends ChangeNotifier {
-  final MonitorHealthUseCase _useCase;
+final firebaseHealthSourceProvider =
+    Provider<FirebaseHealthSource>((ref) => FirebaseHealthSource());
 
-  HealthProvider(this._useCase);
+final healthRepoProvider = Provider<IHealthRepository>((ref) {
+  return HealthRepositoryImpl(remote: ref.watch(firebaseHealthSourceProvider));
+});
 
-  bool _isLoading = false;
-  String? _error;
-  bool _disposed = false;
+final monitorHealthUseCaseProvider = Provider<MonitorHealthUseCase>((ref) {
+  return MonitorHealthUseCase(ref.watch(healthRepoProvider));
+});
 
-  List<HealthModel> _readings = [];
-  List<HealthModel> _history = [];
+final latestReadingsProvider =
+    StreamProvider.family<List<HealthModel>, String>((ref, elderlyId) {
+  return ref.watch(monitorHealthUseCaseProvider).watchLatestReadings(elderlyId);
+});
 
-  StreamSubscription<List<HealthModel>>? _subscription;
+final myLatestReadingsProvider = StreamProvider<List<HealthModel>>((ref) {
+  final elderlyId = ref.watch(activeElderlyIdProvider);
+  if (elderlyId == null) return const Stream.empty();
+  return ref.watch(monitorHealthUseCaseProvider).watchLatestReadings(elderlyId);
+});
 
-  //================== Getters ==================
-
-  bool get isLoading => _isLoading;
-
-  String? get error => _error;
-
-  bool get hasError => _error != null;
-
-  bool get hasData => _readings.isNotEmpty;
-
-  List<HealthModel> get readings => List.unmodifiable(_readings);
-
-  List<HealthModel> get history => List.unmodifiable(_history);
-
-  //================== Helpers ==================
-
-  void _safeNotify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    _isLoading = true;
-    _error = null;
-    _safeNotify();
-
-    try {
-      await action();
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      _safeNotify();
-    }
-  }
-
-  //================== Stream ==================
-
-  Future<void> watchLatestReadings(String elderlyId) async {
-    await _subscription?.cancel();
-
-    _subscription = _useCase
-        .watchLatestReadings(elderlyId)
-        .listen(
-          (data) {
-            _readings = data;
-            _safeNotify();
-          },
-          onError: (error) {
-            _error = error.toString();
-            _safeNotify();
-          },
-        );
-  }
-
-  //================== History ==================
-
-  Future<void> loadHistory({
-    required String elderlyId,
-    required String type,
-    int limit = 30,
-  }) {
-    return _run(() async {
-      _history = await _useCase.getHistory(
-        elderlyId: elderlyId,
-        type: type,
-        limit: limit,
+final healthHistoryProvider = FutureProvider.family<List<HealthModel>,
+    ({String elderlyId, String type, int limit})>((ref, args) {
+  return ref.watch(monitorHealthUseCaseProvider).getHistory(
+        elderlyId: args.elderlyId,
+        type: args.type,
+        limit: args.limit,
       );
-    });
-  }
+});
 
-  //================== CRUD ==================
-
-  Future<void> addReading(HealthModel reading) {
-    return _run(() => _useCase.addReading(reading));
-  }
-
-  Future<void> updateReading(HealthModel reading) {
-    return _run(() => _useCase.updateReading(reading));
-  }
-
-  Future<void> deleteReading(String readingId) {
-    return _run(() => _useCase.deleteReading(readingId));
-  }
-
-  //================== Utils ==================
-
-  void clearError() {
-    _error = null;
-    _safeNotify();
-  }
-
-  Future<void> refresh(String elderlyId) async {
-    await watchLatestReadings(elderlyId);
-  }
-
-  //================== Dispose ==================
-
+class HealthActionsNotifier extends Notifier<void> {
   @override
-  void dispose() {
-    _disposed = true;
-    _subscription?.cancel();
-    super.dispose();
-  }
+  void build() {}
+
+  Future<HealthModel> addReading(HealthModel reading) =>
+      ref.read(monitorHealthUseCaseProvider).addReading(reading);
+
+  Future<void> updateReading(HealthModel reading) =>
+      ref.read(monitorHealthUseCaseProvider).updateReading(reading);
+
+  Future<void> deleteReading(String id) =>
+      ref.read(monitorHealthUseCaseProvider).deleteReading(id);
 }
+
+final healthActionsProvider =
+    NotifierProvider<HealthActionsNotifier, void>(HealthActionsNotifier.new);

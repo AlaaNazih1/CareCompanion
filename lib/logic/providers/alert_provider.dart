@@ -1,19 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/repositories/alert_repo_impl.dart';       // AlertRepositoryImpl
-import '../../data/sources/remote/firebase_alert.dart';      // FirebaseAlertSource
-import '../../core/network_info.dart';                       // NetworkInfo
-import '../../logic/repositories/i_alert_repo.dart';        // IAlertRepository
+import '../../data/repositories/alert_repo_impl.dart';
+import '../../data/sources/remote/firebase_alert.dart';
+import '../../core/network_info.dart';
+import '../repositories/i_alert_repo.dart';
 import '../../data/models/alert_model.dart';
+import 'common_providers.dart';
 
-// ── 1. Dependencies ──────────────────────────────────────────────────────────
 final networkInfoProvider = Provider<NetworkInfo>((ref) => NetworkInfoImpl());
 
 final firebaseAlertSourceProvider = Provider<FirebaseAlertSource>((ref) {
   return FirebaseAlertSource();
 });
 
-// ── 2. Repository  (IAlertRepository ← AlertRepositoryImpl) ─────────────────
 final alertRepoProvider = Provider<IAlertRepository>((ref) {
   return AlertRepositoryImpl(
     remote: ref.watch(firebaseAlertSourceProvider),
@@ -21,33 +20,32 @@ final alertRepoProvider = Provider<IAlertRepository>((ref) {
   );
 });
 
-// ── 3. Alerts stream ─────────────────────────────────────────────────────────
 final alertsProvider =
     StreamProvider.family<List<AlertModel>, String>((ref, elderlyId) {
   return ref.watch(alertRepoProvider).watchAlerts(elderlyId);
 });
 
-// ── 4. Unresolved count (badge) ──────────────────────────────────────────────
-final unresolvedAlertCountProvider =
-    Provider.family<int, String>((ref, elderlyId) {
-  return ref.watch(alertsProvider(elderlyId)).value
+/// نسخة مربوطة تلقائيًا بالمستخدم الحالي
+final myAlertsProvider = StreamProvider<List<AlertModel>>((ref) {
+  final elderlyId = ref.watch(activeElderlyIdProvider);
+  if (elderlyId == null) return const Stream.empty();
+  return ref.watch(alertRepoProvider).watchAlerts(elderlyId);
+});
+
+final unresolvedAlertCountProvider = Provider<int>((ref) {
+  return ref.watch(myAlertsProvider).value
           ?.where((a) => !a.isRead)
           .length ??
       0;
 });
 
-// ── 5. Emergency alerts only ─────────────────────────────────────────────────
-final emergencyAlertsProvider =
-    Provider.family<List<AlertModel>, String>((ref, elderlyId) {
-  return ref
-          .watch(alertsProvider(elderlyId))
-          .value
+final emergencyAlertsProvider = Provider<List<AlertModel>>((ref) {
+  return ref.watch(myAlertsProvider).value
           ?.where((a) => a.type == 'emergency' && !a.isRead)
           .toList() ??
       [];
 });
 
-// ── 6. Notifier for mutations ────────────────────────────────────────────────
 class AlertNotifier extends Notifier<void> {
   @override
   void build() {}

@@ -10,22 +10,21 @@ class FirebaseAlertSource {
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection(AppConstants.alertsCollection);
 
-  Stream<List<AlertModel>> watchAlerts(String caregiverId) =>
-      _col
-          .where('caregiverId', isEqualTo: caregiverId)
-          .orderBy('createdAt', descending: true)
-          .limit(50)
-          .snapshots()
-          .map((s) => s.docs
-              .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
-              .toList());
+  
+  Stream<List<AlertModel>> watchAlerts(String elderlyId) => _col
+      .where('elderlyId', isEqualTo: elderlyId)
+      .orderBy('createdAt', descending: true)
+      .limit(50)
+      .snapshots()
+      .map((s) => s.docs
+          .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
+          .toList());
 
-  Stream<int> watchUnreadCount(String caregiverId) =>
-      _col
-          .where('caregiverId', isEqualTo: caregiverId)
-          .where('isRead', isEqualTo: false)
-          .snapshots()
-          .map((s) => s.docs.length);
+  Stream<int> watchUnreadCount(String elderlyId) => _col
+      .where('elderlyId', isEqualTo: elderlyId)
+      .where('isRead', isEqualTo: false)
+      .snapshots()
+      .map((s) => s.docs.length);
 
   Future<AlertModel> sendAlert(AlertModel alert) async {
     final ref = _col.doc();
@@ -37,10 +36,10 @@ class FirebaseAlertSource {
   Future<void> markAsRead(String alertId) =>
       _col.doc(alertId).update({'isRead': true});
 
-  Future<void> markAllAsRead(String caregiverId) async {
+  Future<void> markAllAsRead(String elderlyId) async {
     final batch = _db.batch();
     final snap = await _col
-        .where('caregiverId', isEqualTo: caregiverId)
+        .where('elderlyId', isEqualTo: elderlyId)
         .where('isRead', isEqualTo: false)
         .get();
     for (final doc in snap.docs) {
@@ -50,11 +49,11 @@ class FirebaseAlertSource {
   }
 
   Future<List<AlertModel>> getAlertsByType({
-    required String caregiverId,
+    required String elderlyId,
     required String type,
   }) async {
     final snap = await _col
-        .where('caregiverId', isEqualTo: caregiverId)
+        .where('elderlyId', isEqualTo: elderlyId)
         .where('type', isEqualTo: type)
         .orderBy('createdAt', descending: true)
         .get();
@@ -62,9 +61,10 @@ class FirebaseAlertSource {
         .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
         .toList();
   }
-  Future<List<AlertModel>> getAlerts(String caregiverId) async {
+
+  Future<List<AlertModel>> getAlerts(String elderlyId) async {
     final snap = await _col
-        .where('caregiverId', isEqualTo: caregiverId)
+        .where('elderlyId', isEqualTo: elderlyId)
         .orderBy('createdAt', descending: true)
         .get();
 
@@ -72,6 +72,7 @@ class FirebaseAlertSource {
         .map((d) => AlertModel.fromJson({...d.data(), 'id': d.id}))
         .toList();
   }
+
   Future<void> deleteAlert(String alertId) async {
     await _col.doc(alertId).delete();
   }
