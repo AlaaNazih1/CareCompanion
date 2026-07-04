@@ -1,3 +1,7 @@
+// ══════════════════════════════════════════════
+//  lib/data/sources/remote/firebase_auth_source.dart
+// ══════════════════════════════════════════════
+
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -93,6 +97,17 @@ class FirebaseAuthSource {
     }
   }
 
+  Stream<UserModel?> watchUser(String userId) {
+    return _db
+        .collection(AppConstants.usersCollection)
+        .doc(userId)
+        .snapshots()
+        .map((doc) {
+      if (!doc.exists) return null;
+      return UserModel.fromJson({...doc.data()!, 'id': doc.id});
+    });
+  }
+
   Future<void> updateFcmToken(String userId, String token) async {
     try {
       await _db
@@ -147,6 +162,113 @@ class FirebaseAuthSource {
       await _auth.signOut();
     } catch (e) {
       throw AuthFailure(message: 'مش قادر يسجل خروج');
+    }
+  }
+
+  // ══════════════════════════════════════════════
+  //  حذف الحساب نهائيًا
+  // ══════════════════════════════════════════════
+  //
+  //  الترتيب مهم: بنحذف بيانات Firestore الأول وبعدين حساب
+  //  المصادقة، عشان لو حذف الـ Auth نجح والـ Firestore فشل هنفضل
+  //  شايلين بيانات يتيمة محدش يقدر يوصلها تاني (لأن الـ rules
+  //  بتعتمد على uid اللي هيبقى اتمسح). فالعكس أأمن.
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthFailure(message: 'مفيش مستخدم مسجل دخول');
+    }
+    final uid = user.uid;
+
+    try {
+      final userDocRef = _db.collection(AppConstants.usersCollection).doc(uid);
+      final userDoc    = await userDocRef.get();
+      final userData   = userDoc.data();
+
+      final batch = _db.batch();
+
+      // ── 1) فك الربط مع الطرف التاني (لو مربوطين) ──
+      final linkedCaregiverId = userData?['caregiverId'] as String?;
+      final linkedElderlyId   = userData?['elderlyId'] as String?;
+
+      if (linkedCaregiverId != null && linkedCaregiverId.isNotEmpty) {
+        batch.update(
+          _db.collection(AppConstants.usersCollection).doc(linkedCaregiverId),
+          {'elderlyId': FieldValue.delete()},
+        );
+      }
+      if (linkedElderlyId != null && linkedElderlyId.isNotEmpty) {
+        batch.update(
+          _db.collection(AppConstants.usersCollection).doc(linkedElderlyId),
+          {'caregiverId': FieldValue.delete()},
+        );
+      }
+
+      // ── 2) حذف البيانات المرتبطة (لو المستخدم مسن) ──
+      // الأدوية
+      final meds = await _db
+          .collection(AppConstants.medicationsCollection)
+          .where('elderlyId', isEqualTo: uid)
+          .get();
+      for (final doc in meds.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // القراءات الصحية
+      final health = await _db
+          .collection(AppConstants.healthRecordsCollection)
+          .where('elderlyId', isEqualTo: uid)
+          .get();
+      for (final doc in health.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // الموقع
+      final locationDoc =
+          _db.collection(AppConstants.locationsCollection).doc(uid);
+      batch.delete(locationDoc);
+
+      // التنبيهات (سواء المستخدم كان المسن أو المسؤول فيها)
+      final alertsAsElderly = await _db
+          .collection(AppConstants.alertsCollection)
+          .where('elderlyId', isEqualTo: uid)
+          .get();
+      for (final doc in alertsAsElderly.docs) {
+        batch.delete(doc.reference);
+      }
+      final alertsAsCaregiver = await _db
+          .collection(AppConstants.alertsCollection)
+          .where('caregiverId', isEqualTo: uid)
+          .get();
+      for (final doc in alertsAsCaregiver.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // جهات الذاكرة (subcollection)
+      final contacts = await userDocRef.collection('memory_contacts').get();
+      for (final doc in contacts.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // ── 3) حذف وثيقة المستخدم نفسها ──
+      batch.delete(userDocRef);
+
+      await batch.commit();
+    } catch (e) {
+      throw ServerFailure(details: 'فشل حذف بيانات الحساب: $e');
+    }
+
+    // ── 4) حذف حساب المصادقة (لازم يكون آخر خطوة) ──
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw const AuthFailure(
+          message:
+              'لأسباب أمان، لازم تسجل خروج وتدخل تاني بنفس رقمك ثم تحاول تحذف الحساب فورًا بعد الدخول.',
+        );
+      }
+      throw AuthFailure(message: 'حصل خطأ في حذف الحساب: ${e.message}');
     }
   }
 

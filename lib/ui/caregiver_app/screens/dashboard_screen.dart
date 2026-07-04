@@ -207,6 +207,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  // ── تم إصلاحها: الكارت بقى قابل للضغط وبيودي لصفحة التقارير ──
   Widget _buildElderlyStatusCard() {
     final medsAsync = ref.watch(myTodayMedicationsProvider);
 
@@ -218,91 +219,98 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         horizontal: AppConstants.paddingMedium,
         vertical: AppConstants.paddingSmall,
       ),
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.paddingMedium),
-        decoration: BoxDecoration(
-          gradient: AppColors.caregiverGradient,
-          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.caregiverPrimary.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            AnimatedBuilder(
-              animation: _idleAnim,
-              builder: (_, child) => Transform.translate(
-                offset: Offset(0, _idleAnim.value * -4),
-                child: child,
+      child: PressableButton(
+        onTap: () => Navigator.push(
+          context, _slideRoute(const ReportsScreen())),
+        child: Container(
+          padding: const EdgeInsets.all(AppConstants.paddingMedium),
+          decoration: BoxDecoration(
+            gradient: AppColors.caregiverGradient,
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.caregiverPrimary.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
-              child: Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.2),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.4), width: 2),
+            ],
+          ),
+          child: Row(
+            children: [
+              AnimatedBuilder(
+                animation: _idleAnim,
+                builder: (_, child) => Transform.translate(
+                  offset: Offset(0, _idleAnim.value * -4),
+                  child: child,
                 ),
-                child: const Icon(Icons.person_rounded,
-                  color: Colors.white, size: 34),
+                child: Container(
+                  width: 64, height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.2),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.4), width: 2),
+                  ),
+                  child: const Icon(Icons.person_rounded,
+                    color: Colors.white, size: 34),
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('المسن',
-                    style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600,
-                      color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      ScaleTransition(
-                        scale: _pulseAnim,
-                        child: Container(
-                          width: 8, height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF69F0AE),
-                            shape: BoxShape.circle,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('المسن',
+                      style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w600,
+                        color: Colors.white)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        ScaleTransition(
+                          scale: _pulseAnim,
+                          child: Container(
+                            width: 8, height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF69F0AE),
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text('نشط',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _StatusPill(
-                        icon: Icons.medication_rounded,
-                        label: '$taken/$total أدوية',
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      const _StatusPill(
-                        icon: Icons.location_on_rounded,
-                        label: 'الموقع',
-                        color: Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 6),
+                        const Text('نشط',
+                          style: TextStyle(fontSize: 13, color: Colors.white70)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _StatusPill(
+                          icon: Icons.medication_rounded,
+                          label: '$taken/$total أدوية',
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        const _StatusPill(
+                          icon: Icons.location_on_rounded,
+                          label: 'الموقع',
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const Icon(Icons.chevron_left_rounded,
+                color: Colors.white70, size: 22),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // ── تم إصلاحها: كل كارت بقى قابل للضغط وبيوديك لمكان منطقي ──
   Widget _buildStatsGrid() {
     final medsAsync = ref.watch(myTodayMedicationsProvider);
     final readingsAsync = ref.watch(myLatestReadingsProvider);
@@ -328,37 +336,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       child: Row(
         children: [
           Expanded(
-            child: StatCard(
-              icon: Icons.medication_rounded,
-              label: 'الأدوية',
-              value: '$taken/$total',
-              color: AppColors.caregiverPrimary,
-              bgColor: AppColors.caregiverPrimaryLight,
-              delay: const Duration(milliseconds: 200),
+            child: PressableButton(
+              onTap: () => Navigator.push(
+                context, _slideRoute(const MedicationManagementScreen())),
+              child: StatCard(
+                icon: Icons.medication_rounded,
+                label: 'الأدوية',
+                value: '$taken/$total',
+                color: AppColors.caregiverPrimary,
+                bgColor: AppColors.caregiverPrimaryLight,
+                delay: const Duration(milliseconds: 200),
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: StatCard(
-              icon: Icons.favorite_rounded,
-              label: 'النبض',
-              value: pulse?.displayValue ?? '--',
-              unit: 'bpm',
-              color: AppColors.emergency,
-              bgColor: AppColors.emergencyLight,
-              delay: const Duration(milliseconds: 280),
+            child: PressableButton(
+              onTap: () => Navigator.push(
+                context, _slideRoute(const ReportsScreen())),
+              child: StatCard(
+                icon: Icons.favorite_rounded,
+                label: 'النبض',
+                value: pulse?.displayValue ?? '--',
+                unit: 'bpm',
+                color: AppColors.emergency,
+                bgColor: AppColors.emergencyLight,
+                delay: const Duration(milliseconds: 280),
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: StatCard(
-              icon: Icons.speed_rounded,
-              label: 'الضغط',
-              value: bp?.displayValue ?? '--',
-              unit: 'mmHg',
-              color: AppColors.elderlyPrimary,
-              bgColor: AppColors.elderlyPrimaryLight,
-              delay: const Duration(milliseconds: 360),
+            child: PressableButton(
+              onTap: () => Navigator.push(
+                context, _slideRoute(const ReportsScreen())),
+              child: StatCard(
+                icon: Icons.speed_rounded,
+                label: 'الضغط',
+                value: bp?.displayValue ?? '--',
+                unit: 'mmHg',
+                color: AppColors.elderlyPrimary,
+                bgColor: AppColors.elderlyPrimaryLight,
+                delay: const Duration(milliseconds: 360),
+              ),
             ),
           ),
         ],
@@ -366,8 +386,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // ── تم إصلاحها: "اتصال" كان بس haptic من غير فعل حقيقي،
-  //    "الأدوية" و"تقارير" كانوا onTap: () {} فاضيين.
   Widget _buildQuickActions() {
     final elderlyPhoneAsync = ref.watch(_elderlyPhoneProvider);
 
@@ -518,9 +536,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // ── تم إصلاحها: الـ index كان بيفضل عالق على آخر تاب اتضغط
-  //    حتى بعد الرجوع بالـ back button. دلوقتي بيرجع "الرئيسية"
-  //    تلقائيًا بمجرد الرجوع من أي شاشة.
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(

@@ -1,3 +1,7 @@
+// ══════════════════════════════════════════════
+//  lib/data/repositories/auth_repo_impl.dart
+// ══════════════════════════════════════════════
+
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/failures.dart';
 import '../../core/network_info.dart';
@@ -52,6 +56,9 @@ class AuthRepoImpl implements IAuthRepo {
   }
 
   @override
+  Stream<UserModel?> watchUser(String userId) => _remote.watchUser(userId);
+
+  @override
   Future<UserModel?> getUserByPhone(String phone) async {
     if (!await _network.isConnected) throw const NetworkFailure();
     return _remote.getUserByPhone(phone);
@@ -77,4 +84,10 @@ class AuthRepoImpl implements IAuthRepo {
 
   @override
   Future<void> signOut() => _remote.signOut();
+
+  @override
+  Future<void> deleteAccount() async {
+    if (!await _network.isConnected) throw const NetworkFailure();
+    return _remote.deleteAccount();
+  }
 }

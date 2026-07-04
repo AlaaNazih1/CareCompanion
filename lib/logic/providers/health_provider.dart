@@ -24,7 +24,7 @@ final latestReadingsProvider =
 
 final myLatestReadingsProvider = StreamProvider<List<HealthModel>>((ref) {
   final elderlyId = ref.watch(activeElderlyIdProvider);
-  if (elderlyId == null) return const Stream.empty();
+  if (elderlyId == null) return Stream.value(<HealthModel>[]);
   return ref.watch(monitorHealthUseCaseProvider).watchLatestReadings(elderlyId);
 });
 

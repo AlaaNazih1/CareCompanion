@@ -2,13 +2,16 @@
 //  lib/ui/elderly_app/screens/emergency_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:care_companion/logic/providers/alert_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants.dart';
 import '../../../data/models/alert_model.dart';
+import '../../../logic/providers/auth_provider.dart';
 import '../../../logic/providers/common_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
@@ -28,6 +31,10 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
   bool _isActivated = false;
   bool _isSending   = false;
   int  _countdown   = 5;
+  bool _isSirenPlaying = false;
+
+  // ── Audio ─────────────────────────────────────
+  final AudioPlayer _sirenPlayer = AudioPlayer();
 
   // ── Animations ────────────────────────────────
   late AnimationController _rippleCtrl;
@@ -44,6 +51,9 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
   @override
   void initState() {
     super.initState();
+
+    // إعداد الصوت — يتكرر لحد ما نوقفه يدويًا
+    _sirenPlayer.setReleaseMode(ReleaseMode.loop);
 
     // Ripple — 3 دوايرة بتاخد دورها
     _rippleCtrl = AnimationController(
@@ -108,7 +118,38 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
     _pulseCtrl.dispose();
     _bgCtrl.dispose();
     _countCtrl.dispose();
+    _sirenPlayer.stop();
+    _sirenPlayer.dispose();
     super.dispose();
+  }
+
+  // ══════════════════════════════════════════════
+  //  صوت السايرن — تشغيل/إيقاف حقيقي عن طريق audioplayers
+  // ══════════════════════════════════════════════
+  Future<void> _toggleSiren() async {
+    HapticFeedback.mediumImpact();
+    if (_isSirenPlaying) {
+      await _stopSiren();
+    } else {
+      await _startSiren();
+    }
+  }
+
+  Future<void> _startSiren() async {
+    try {
+      await _sirenPlayer.play(AssetSource('sounds/siren.mp3'));
+      if (mounted) setState(() => _isSirenPlaying = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('مش قادر يشغل صوت الإنذار: $e')));
+      }
+    }
+  }
+
+  Future<void> _stopSiren() async {
+    await _sirenPlayer.stop();
+    if (mounted) setState(() => _isSirenPlaying = false);
   }
 
   void _onEmergencyPressed() async {
@@ -117,6 +158,9 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
     HapticFeedback.heavyImpact();
     setState(() => _isActivated = true);
     _bgCtrl.forward();
+
+    // السايرن بيشتغل تلقائيًا لحظة تفعيل الطوارئ
+    if (!_isSirenPlaying) await _startSiren();
 
     // Countdown
     for (int i = 5; i >= 0; i--) {
@@ -139,6 +183,7 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
       _countdown   = 5;
     });
     _bgCtrl.reverse();
+    _stopSiren();
   }
 
   Future<void> _sendAlert() async {
@@ -179,11 +224,25 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
       // كمل من غير موقع لو فشل جلبه
     }
 
+    // جيب رقم موبايل الابن (caregiver) عشان زرار "اتصل بالابن"
+    String? caregiverId;
+    String? caregiverPhone;
+    try {
+      final elderlyUser = await ref.read(authRepoProvider).getUser(elderlyId);
+      caregiverId = elderlyUser?.caregiverId;
+      if (caregiverId != null && caregiverId.isNotEmpty) {
+        final caregiverUser = await ref.read(authRepoProvider).getUser(caregiverId);
+        caregiverPhone = caregiverUser?.phone;
+      }
+    } catch (_) {
+      // كمل حتى لو فشل جلب بيانات الابن
+    }
+
     try {
       final alert = AlertModel(
         id: '',
         elderlyId: elderlyId,
-        caregiverId: '', // TODO: هات caregiverId من UserModel لو متاح
+        caregiverId: caregiverId ?? '',
         type: AppConstants.alertEmergency,
         message: 'ضغط زرار الطوارئ',
         latitude: lat,
@@ -205,6 +264,14 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
               borderRadius: BorderRadius.circular(12)),
           ),
         );
+      }
+
+      // حاول تتصل بالابن تلقائيًا لو رقمه متاح
+      if (caregiverPhone != null && caregiverPhone.isNotEmpty) {
+        final uri = Uri(scheme: 'tel', path: caregiverPhone);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -239,7 +306,10 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios_rounded,
               color: AppColors.textPrimaryOf(context)),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _stopSiren();
+              Navigator.pop(context);
+            },
           ),
           title: Text('الطوارئ',
             style: TextStyle(color: AppColors.textPrimaryOf(context), fontSize: 20,
@@ -383,7 +453,7 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
 
               const SizedBox(height: 48),
 
-              // ── Info Cards ───────────────────────
+              // ── Info Cards (فعليين دلوقتي) ────────
               if (!_isActivated)
                 FadeSlideIn(
                   delay: const Duration(milliseconds: 300),
@@ -396,18 +466,28 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
                           icon: Icons.location_on_rounded,
                           label: 'بيبعت موقعك',
                           color: AppColors.elderlyPrimary,
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text(
+                              'الموقع بيتبعت تلقائيًا لحظة الضغط على طوارئ'))),
                         ),
                         const SizedBox(width: 8),
                         _InfoChip(
                           icon: Icons.phone_rounded,
                           label: 'بيتصل بالابن',
                           color: AppColors.success,
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text(
+                              'هيتصل بالابن تلقائيًا بعد إرسال الطوارئ'))),
                         ),
                         const SizedBox(width: 8),
                         _InfoChip(
-                          icon: Icons.volume_up_rounded,
-                          label: 'صوت إنذار',
+                          icon: _isSirenPlaying
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                          label: _isSirenPlaying ? 'إيقاف الصوت' : 'صوت إنذار',
                           color: AppColors.warning,
+                          isActive: _isSirenPlaying,
+                          onTap: _toggleSiren,
                         ),
                       ],
                     ),
@@ -468,31 +548,47 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
   );
 }
 
+// ── InfoChip — بقت قابلة للضغط وبتدعم حالة "مفعّل" ──
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
+  final VoidCallback? onTap;
+  final bool isActive;
 
-  const _InfoChip({required this.icon, required this.label, required this.color});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.onTap,
+    this.isActive = false,
+  });
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 4),
-          Text(label,
-            style: TextStyle(fontSize: 11, color: color,
-              fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center),
-        ],
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isActive ? color.withOpacity(0.2) : color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
+          border: Border.all(
+            color: isActive ? color : color.withOpacity(0.2),
+            width: isActive ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 4),
+            Text(label,
+              style: TextStyle(fontSize: 11, color: color,
+                fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center),
+          ],
+        ),
       ),
     ),
   );

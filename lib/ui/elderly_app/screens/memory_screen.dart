@@ -2,6 +2,8 @@
 //  lib/ui/elderly_app/screens/memory_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:audioplayers/audioplayers.dart';
+import 'package:care_companion/core/failures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -385,7 +387,12 @@ class _LinkCaregiverCardState extends ConsumerState<_LinkCaregiverCard> {
         context.showSnackBar('تم الربط بنجاح!');
       }
     } catch (e) {
-      if (mounted) context.showSnackBar('حصل خطأ: $e', isError: true);
+      if (mounted) {
+        context.showSnackBar(
+          e is Failure ? e.message : 'حصل خطأ، حاول تاني',
+          isError: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -469,7 +476,8 @@ class _LinkCaregiverCardState extends ConsumerState<_LinkCaregiverCard> {
 
 // ══════════════════════════════════════════════
 //  تمرين تاريخ النهاردة — تفاعلي حقيقي بيتحقق من
-//  التاريخ الفعلي بتاع الجهاز.
+//  التاريخ الفعلي بتاع الجهاز + صوت تلقائي عند
+//  الإجابة (صح/غلط).
 // ══════════════════════════════════════════════
 class _DateQuizSheet extends StatefulWidget {
   const _DateQuizSheet();
@@ -483,6 +491,9 @@ class _DateQuizSheetState extends State<_DateQuizSheet> {
   final _monthCtrl = TextEditingController();
   bool? _isCorrect;
 
+  // ── مشغّل الصوت — instance واحد يتعاد استخدامه طول عمر الـ sheet ──
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
   static const _arabicMonths = [
     'يناير','فبراير','مارس','أبريل','مايو','يونيو',
     'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
@@ -495,7 +506,20 @@ class _DateQuizSheetState extends State<_DateQuizSheet> {
   void dispose() {
     _dayCtrl.dispose();
     _monthCtrl.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  // ── تشغيل صوت النتيجة (صح/غلط) ──
+  Future<void> _playResultSound(bool correct) async {
+    try {
+      await _audioPlayer.play(
+        AssetSource(correct ? 'sounds/correct.mp3' : 'sounds/wrong.mp3'),
+      );
+    } catch (_) {
+      // لو فشل تشغيل الصوت (مثلاً مشكلة نظام أو مفيش سماعة)، بنتجاهل
+      // الخطأ عشان مايوقفش التجربة؛ الـ haptic feedback هيفضل شغال.
+    }
   }
 
   void _check() {
@@ -503,8 +527,10 @@ class _DateQuizSheetState extends State<_DateQuizSheet> {
     final day   = int.tryParse(_dayCtrl.text.trim());
     final month = int.tryParse(_monthCtrl.text.trim());
     final correct = day == now.day && month == now.month;
+
     HapticFeedback.heavyImpact();
     setState(() => _isCorrect = correct);
+    _playResultSound(correct);
   }
 
   @override
@@ -770,7 +796,12 @@ class _AddContactSheetState extends ConsumerState<_AddContactSheet> {
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) context.showSnackBar('حصل خطأ: $e', isError: true);
+      if (mounted) {
+        context.showSnackBar(
+          e is Failure ? e.message : 'حصل خطأ، حاول تاني',
+          isError: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

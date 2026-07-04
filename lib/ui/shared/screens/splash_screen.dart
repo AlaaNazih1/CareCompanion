@@ -19,13 +19,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
 
   // ── Animations ────────────────────────────────
-  late AnimationController _logoCtrl;
   late AnimationController _textCtrl;
   late AnimationController _bgCtrl;
   late AnimationController _pulseCtrl;
 
-  late Animation<double> _logoScale;
-  late Animation<double> _logoFade;
   late Animation<double> _textFade;
   late Animation<Offset> _textSlide;
   late Animation<double> _bgScale;
@@ -47,16 +44,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _bgScale = Tween<double>(begin: 0.0, end: 3.0).animate(
       CurvedAnimation(parent: _bgCtrl, curve: Curves.easeOutCubic),
     );
-
-    // Logo
-    _logoCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _logoScale = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut),
-    );
-    _logoFade = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
 
     // Text
     _textCtrl = AnimationController(
@@ -84,12 +71,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 200));
     _bgCtrl.forward();
 
-    // Logo appear
-    await Future.delayed(const Duration(milliseconds: 400));
-    _logoCtrl.forward();
-
     // Text appear
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 400));
     _textCtrl.forward();
 
     // Idle pulse
@@ -140,7 +123,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
-    _logoCtrl.dispose();
     _textCtrl.dispose();
     _bgCtrl.dispose();
     _pulseCtrl.dispose();
@@ -208,41 +190,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
-                // Logo
-                ScaleTransition(
-                  scale: _logoScale,
-                  child: FadeTransition(
-                    opacity: _logoFade,
-                    child: ScaleTransition(
-                      scale: _pulseAnim,
-                      child: Container(
-                        width: MediaQuery.of(context).size.width * 0.55,
-                        height: MediaQuery.of(context).size.width * 0.55,
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.15),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: Image.asset(
-                          'assets/icons/logo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.favorite_rounded,
-                            color: Colors.white,
-                            size: 56,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 36),
 
                 // App Name
                 SlideTransition(

@@ -27,11 +27,26 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.read(authRepoProvider).authStateChanges;
 });
 
-// ── Current User Model ────────────────────────
-final currentUserProvider = FutureProvider<UserModel?>((ref) async {
-  final userId = ref.read(authRepoProvider).currentUserId;
-  if (userId == null) return null;
-  return ref.read(authRepoProvider).getUser(userId);
+// ══════════════════════════════════════════════
+//  Current User Model
+// ══════════════════════════════════════════════
+//
+//  ── تم إصلاحها: كانت FutureProvider بتستخدم ref.read على
+//     currentUserId، يعني بتتحسب مرة واحدة وبتفضل شايلة بيانات
+//     المستخدم القديم حتى بعد تسجيل خروج ودخول برقم تاني على
+//     نفس الجهاز. دلوقتي StreamProvider بيراقب authStateProvider
+//     (ref.watch) فعليًا، فأي تغيير حقيقي في حالة تسجيل الدخول
+//     (signOut / signInWithCredential) بيخلي الـ provider يعيد
+//     حساب نفسه تلقائيًا، وبيتابع بيانات Firestore بالـ live
+//     (watchUser) عشان أي تحديث زي حفظ الاسم أو ربط caregiverId
+//     يوصل فورًا لكل الشاشات من غير ما نحتاج invalidate يدوي.
+final currentUserProvider = StreamProvider<UserModel?>((ref) {
+  final authState    = ref.watch(authStateProvider);
+  final firebaseUser = authState.valueOrNull;
+
+  if (firebaseUser == null) return Stream.value(null);
+
+  return ref.watch(authRepoProvider).watchUser(firebaseUser.uid);
 });
 
 // ── حساب المستخدم مكتمل ولا لسه؟ ──────────────
@@ -58,6 +73,17 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
     } on Failure catch (e) {
       state = AsyncValue.error(e.message, StackTrace.current);
       return null;
+    }
+  }
+  // حذف الحساب نهائيًا
+  Future<bool> deleteAccount() async {
+    try {
+      await _repo.deleteAccount();
+      state = const AsyncValue.data(null);
+      return true;
+    } on Failure catch (e) {
+      state = AsyncValue.error(e.message, StackTrace.current);
+      return false;
     }
   }
 

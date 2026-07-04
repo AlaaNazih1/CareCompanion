@@ -36,15 +36,13 @@ final todayMedicationsProvider =
 /// نسخة مربوطة تلقائيًا بالمستخدم الحالي (استخدمها في الشاشات مباشرة)
 final myTodayMedicationsProvider = StreamProvider<List<MedicationModel>>((ref) {
   final elderlyId = ref.watch(activeElderlyIdProvider);
-  if (elderlyId == null) return const Stream.empty();
-  return ref
-      .watch(trackMedicationUseCaseProvider)
-      .watchTodayMedications(elderlyId);
+  if (elderlyId == null) return Stream.value(<MedicationModel>[]);
+  return ref.watch(trackMedicationUseCaseProvider).watchTodayMedications(elderlyId);
 });
 
 final myAllMedicationsProvider = StreamProvider<List<MedicationModel>>((ref) {
   final elderlyId = ref.watch(activeElderlyIdProvider);
-  if (elderlyId == null) return const Stream.empty();
+  if (elderlyId == null) return Stream.value(<MedicationModel>[]);
   return ref.watch(trackMedicationUseCaseProvider).watchMedications(elderlyId);
 });
 

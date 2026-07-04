@@ -1,8 +1,13 @@
-
 abstract class Failure {
   final String message;
   final String? details;
   const Failure({required this.message, this.details});
+
+  // ── تم إصلاحها: بدون toString صريح، أي مكان بيطبع الخطأ بـ '$e'
+  //    كان بيظهر "Instance of 'ServerFailure'" بدل الرسالة الفعلية.
+  //    دلوقتي بيظهر النص الحقيقي اللي المستخدم المفروض يشوفه.
+  @override
+  String toString() => message;
 }
 
 class NetworkFailure extends Failure {

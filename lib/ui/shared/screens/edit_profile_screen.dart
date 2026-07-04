@@ -20,12 +20,12 @@ import '../../shared/animations/app_animations.dart';
 // Dashboard → Cloud Name
 // Settings → Upload → Upload presets (لازم يكون Unsigned)
 class _CloudinaryConfig {
-  static const cloudName    = 'ulhcdebk';
+  static const cloudName = 'ulhcdebk';
   static const uploadPreset = 'CareCompanion';
 
   static Uri get uploadUrl => Uri.parse(
-    'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
-  );
+        'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
+      );
 }
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -37,30 +37,45 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameCtrl = TextEditingController();
-  final _formKey  = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
 
   String? _role;
   String? _existingPhotoUrl;
-  File?   _pickedImage;
-  bool    _isLoading   = false;
-  bool    _isUploading = false;
+  File? _pickedImage;
+  bool _isLoading = false;
+  bool _isUploading = false;
+
+  // ── تم إصلاحها: بدل ما تفضل شاشة تحميل للأبد لو حصل أي خطأ
+  //    (زي permission-denied أو مشكلة شبكة)، دلوقتي بنميز بين
+  //    "لسه بيحمل" و"حصل خطأ" ونعرض رسالة واضحة مع زرار "حاول تاني".
+  bool _hasError = false;
+  String _errorMessage = '';
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_role == null) {
+    if (_role == null && !_hasError) {
       _loadCurrentUser();
     }
   }
 
   Future<void> _loadCurrentUser() async {
-    final user = await ref.read(currentUserProvider.future);
-    if (!mounted) return;
-    setState(() {
-      _role              = user?.role ?? 'elderly';
-      _nameCtrl.text     = user?.name ?? '';
-      _existingPhotoUrl  = user?.photoUrl;
-    });
+    try {
+      final user = await ref.read(currentUserProvider.future);
+      if (!mounted) return;
+      setState(() {
+        _hasError = false;
+        _role = user?.role ?? 'elderly';
+        _nameCtrl.text = user?.name ?? '';
+        _existingPhotoUrl = user?.photoUrl;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _errorMessage = e.toString();
+      });
+    }
   }
 
   @override
@@ -69,10 +84,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.dispose();
   }
 
-  bool  get _isElderly => _role == 'elderly';
-  Color get _primary   => _isElderly
-      ? AppColors.elderlyPrimary
-      : AppColors.caregiverPrimary;
+  bool get _isElderly => _role == 'elderly';
+  Color get _primary =>
+      _isElderly ? AppColors.elderlyPrimary : AppColors.caregiverPrimary;
 
   Future<void> _pickImage() async {
     HapticFeedback.lightImpact();
@@ -109,7 +123,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       final request = http.MultipartRequest('POST', _CloudinaryConfig.uploadUrl)
         ..fields['upload_preset'] = _CloudinaryConfig.uploadPreset
-        ..files.add(await http.MultipartFile.fromPath('file', _pickedImage!.path));
+        ..files
+            .add(await http.MultipartFile.fromPath('file', _pickedImage!.path));
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -138,7 +153,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final repo   = ref.read(authRepoProvider);
+      final repo = ref.read(authRepoProvider);
       final userId = repo.currentUserId;
 
       if (userId == null) {
@@ -170,6 +185,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
       await repo.saveUser(updatedUser);
 
+      // ── ملحوظة: مع currentUserProvider الجديد (StreamProvider
+      //    بيتابع Firestore live)، السطر ده بقى مش ضروري تقنيًا
+      //    لأن أي شاشة تانية هتاخد التحديث تلقائيًا، بس سايبينه
+      //    كإجراء احترازي إضافي مايضرش.
       ref.invalidate(currentUserProvider);
 
       if (!mounted) return;
@@ -188,6 +207,59 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ── حالة الخطأ: بدل ما تفضل تلف للأبد ──
+    if (_hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.bg(context),
+        appBar: AppBar(
+          title: const Text('تعديل الملف الشخصي'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    size: 56, color: AppColors.emergency),
+                const SizedBox(height: 16),
+                Text('حصل خطأ في تحميل بياناتك',
+                    style: AppTextStyles.headline3
+                        .copyWith(color: AppColors.textPrimaryOf(context)),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                Text(_errorMessage,
+                    style: AppTextStyles.bodySmall,
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                PressableButton(
+                  onTap: () {
+                    setState(() => _hasError = false);
+                    _loadCurrentUser();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.elderlyPrimary,
+                      borderRadius: BorderRadius.circular(
+                          AppConstants.borderRadiusMedium),
+                    ),
+                    child: const Text('حاول تاني',
+                        style: AppTextStyles.buttonMedium),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_role == null) {
       return Scaffold(
         backgroundColor: AppColors.bg(context),
@@ -255,13 +327,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               shape: BoxShape.circle,
                               color: _primary,
                               border: Border.all(
-                                color: AppColors.bg(context), width: 2),
+                                  color: AppColors.bg(context), width: 2),
                             ),
                             child: _isUploading
                                 ? const Padding(
                                     padding: EdgeInsets.all(7),
                                     child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2),
+                                        color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Icon(Icons.camera_alt_rounded,
                                     color: Colors.white, size: 18),
@@ -277,8 +349,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               Center(
                 child: Text(
                   'اضغط على الصورة عشان تغيرها',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondaryOf(context)),
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textSecondaryOf(context)),
                 ),
               ),
 
@@ -291,31 +363,34 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   padding: const EdgeInsets.all(AppConstants.paddingXL),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceOf(context),
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.borderRadiusLarge),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.borderRadiusLarge),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 20, offset: const Offset(0, 8)),
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8)),
                     ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('الاسم الكامل', style: AppTextStyles.label.copyWith(
-                        color: AppColors.textSecondaryOf(context))),
+                      Text('الاسم الكامل',
+                          style: AppTextStyles.label.copyWith(
+                              color: AppColors.textSecondaryOf(context))),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _nameCtrl,
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.textPrimaryOf(context)),
+                        style: AppTextStyles.bodyLarge
+                            .copyWith(color: AppColors.textPrimaryOf(context)),
                         textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
                           hintText: 'اكتب اسمك',
-                          prefixIcon: Icon(Icons.person_rounded, color: _primary),
+                          prefixIcon:
+                              Icon(Icons.person_rounded, color: _primary),
                         ),
                         validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'اكتب اسمك' : null,
+                            v == null || v.trim().isEmpty ? 'اكتب اسمك' : null,
                       ),
                     ],
                   ),
@@ -333,23 +408,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     height: AppConstants.buttonHeightLarge,
                     decoration: BoxDecoration(
                       gradient: _isElderly
-                        ? AppColors.elderlyGradient
-                        : AppColors.caregiverGradient,
+                          ? AppColors.elderlyGradient
+                          : AppColors.caregiverGradient,
                       borderRadius: BorderRadius.circular(
-                        AppConstants.borderRadiusMedium),
+                          AppConstants.borderRadiusMedium),
                       boxShadow: [
                         BoxShadow(
-                          color: _primary.withOpacity(0.3),
-                          blurRadius: 16, offset: const Offset(0, 6)),
+                            color: _primary.withOpacity(0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6)),
                       ],
                     ),
                     alignment: Alignment.center,
                     child: _isLoading
-                      ? const SizedBox(
-                          width: 24, height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5))
-                      : const Text('حفظ', style: AppTextStyles.buttonLarge),
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5))
+                        : const Text('حفظ', style: AppTextStyles.buttonLarge),
                   ),
                 ),
               ),

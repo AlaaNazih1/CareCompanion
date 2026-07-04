@@ -28,7 +28,7 @@ final alertsProvider =
 /// نسخة مربوطة تلقائيًا بالمستخدم الحالي
 final myAlertsProvider = StreamProvider<List<AlertModel>>((ref) {
   final elderlyId = ref.watch(activeElderlyIdProvider);
-  if (elderlyId == null) return const Stream.empty();
+  if (elderlyId == null) return Stream.value(<AlertModel>[]);
   return ref.watch(alertRepoProvider).watchAlerts(elderlyId);
 });
 

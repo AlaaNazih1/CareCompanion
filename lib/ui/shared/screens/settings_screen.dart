@@ -21,6 +21,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _role = 'elderly';
+  bool _isDeletingAccount = false;
 
   @override
   void didChangeDependencies() {
@@ -207,6 +208,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             titleColor: AppColors.emergency,
             onTap: () => _confirmSignOut(context, isArabic),
           ),
+
+          const SizedBox(height: 10),
+
+          // ── Delete Account (جديد) ──────────────
+          _SettingsTile(
+            icon: Icons.delete_forever_rounded,
+            iconColor: AppColors.emergency,
+            title: isArabic ? 'حذف الحساب نهائيًا' : 'Delete Account',
+            subtitle: isArabic
+                ? 'هيتم مسح كل بياناتك بشكل دائم'
+                : 'This will permanently erase your data',
+            trailing: _isDeletingAccount
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.emergency))
+                : const Icon(Icons.chevron_left_rounded,
+                    color: AppColors.textSecondary),
+            titleColor: AppColors.emergency,
+            onTap: _isDeletingAccount
+                ? null
+                : () => _confirmDeleteAccount(context, isArabic),
+          ),
         ],
       ),
     );
@@ -252,6 +276,115 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── تأكيد حذف الحساب — تحذير واضح + تأكيد مزدوج ──
+  void _confirmDeleteAccount(BuildContext context, bool isArabic) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_rounded, color: AppColors.emergency),
+            const SizedBox(width: 8),
+            Text(isArabic ? 'حذف الحساب نهائيًا' : 'Delete Account'),
+          ],
+        ),
+        content: Text(
+          isArabic
+              ? 'هيتم حذف حسابك وكل بياناتك (الأدوية، القراءات الصحية، التنبيهات، الموقع) نهائيًا ومفيش رجوع في القرار ده.\n\nمتأكد عايز تكمل؟'
+              : 'Your account and all your data (medications, health records, alerts, location) will be permanently deleted. This cannot be undone.\n\nAre you sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(isArabic ? 'إلغاء' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _showFinalDeleteConfirmation(context, isArabic);
+            },
+            child: Text(
+              isArabic ? 'متابعة' : 'Continue',
+              style: const TextStyle(
+                color: AppColors.emergency,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── تأكيد نهائي ثاني عشان محدش يمسح حسابه بضغطة غلط ──
+  void _showFinalDeleteConfirmation(BuildContext context, bool isArabic) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        ),
+        title: Text(isArabic ? 'تأكيد أخير' : 'Final Confirmation'),
+        content: Text(
+          isArabic
+              ? 'ده آخر تأكيد. هتفقد الوصول لحسابك وكل بياناتك نهائيًا.'
+              : 'This is your last confirmation. You will lose access to your account and all data permanently.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(isArabic ? 'إلغاء' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _performDeleteAccount(isArabic);
+            },
+            child: Text(
+              isArabic ? 'احذف حسابي' : 'Delete My Account',
+              style: const TextStyle(
+                color: AppColors.emergency,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performDeleteAccount(bool isArabic) async {
+    setState(() => _isDeletingAccount = true);
+    HapticFeedback.heavyImpact();
+
+    final success =
+        await ref.read(authNotifierProvider.notifier).deleteAccount();
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.pushNamedAndRemoveUntil(
+        context, RouteNames.welcome, (route) => false,
+      );
+      return;
+    }
+
+    setState(() => _isDeletingAccount = false);
+    final error = ref.read(authNotifierProvider).error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error?.toString() ??
+            (isArabic ? 'فشل حذف الحساب، حاول تاني' : 'Failed to delete account')),
+        backgroundColor: AppColors.emergency,
+        duration: const Duration(seconds: 6),
       ),
     );
   }

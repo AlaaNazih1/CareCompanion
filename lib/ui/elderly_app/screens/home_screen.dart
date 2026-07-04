@@ -2,6 +2,7 @@
 //  lib/ui/elderly_app/screens/home_screen.dart
 // ══════════════════════════════════════════════
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +43,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseScale;
 
+  // ── صوت نجاح الدخول ──
+  final AudioPlayer _welcomeAudioPlayer = AudioPlayer();
+
   // ── Bottom Nav ──
   int _currentIndex = 0;
 
@@ -71,9 +75,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _pulseScale = Tween<double>(begin: 1.0, end: 1.05)
         .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
-    // ── تشغيل تتبّع الموقع الفعلي ──────────────
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _startLocationTracking());
+    // ── تشغيل تتبّع الموقع الفعلي + صوت الترحيب ──
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startLocationTracking();
+      _playWelcomeSound();
+    });
+  }
+
+  // ── صوت نجاح تسجيل الدخول — بيتشغل مرة واحدة بس أول
+  //    ما الصفحة الرئيسية تفتح بعد تسجيل الدخول ──
+  Future<void> _playWelcomeSound() async {
+    try {
+      await _welcomeAudioPlayer.play(
+        AssetSource('sounds/login_success.mp3'),
+      );
+    } catch (_) {
+      // لو فشل تشغيل الصوت (مشكلة نظام أو مفيش سماعة)، بنتجاهل
+      // الخطأ عشان مايأثرش على تجربة المستخدم أو يوقف الصفحة.
+    }
   }
 
   void _startLocationTracking() {
@@ -91,6 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _idleCtrl.dispose();
     _greetCtrl.dispose();
     _pulseCtrl.dispose();
+    _welcomeAudioPlayer.dispose();
     super.dispose();
   }
 
@@ -216,11 +236,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ── تم إصلاحها: كان فيه اسم ثابت "حاج محمد" بيظهر لحد ما بيانات
-  //    المستخدم توصل. دلوقتي: لو لسه بيحمّل أو الاسم فاضي، بيتعرض
-  //    مكان الاسم شكل هيكلي بسيط (skeleton) بدل نص وهمي. وبدل أيقونة
-  //    الشخص الثابتة في الزرار، لو المستخدم عنده صورة بروفايل بتتعرض
-  //    فعليًا.
   Widget _buildHeader() {
     final userAsync = ref.watch(currentUserProvider);
     final name = userAsync.valueOrNull?.name;
@@ -389,8 +404,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ── تم إصلاحها: زرار "ذاكرتي" كان onTap: () {} فاضي.
-  //    دلوقتي بيفتح MemoryScreen فعليًا.
   Widget _buildActionGrid(String elderlyId) {
     return Padding(
       padding: const EdgeInsets.symmetric(
