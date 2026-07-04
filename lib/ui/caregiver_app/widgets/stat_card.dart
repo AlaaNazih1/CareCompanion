@@ -32,9 +32,8 @@ class StatCard extends StatefulWidget {
 
 class _StatCardState extends State<StatCard>
     with SingleTickerProviderStateMixin {
-
   late AnimationController _ctrl;
-  late Animation<double>   _anim;
+  late Animation<double> _anim;
 
   @override
   void initState() {
@@ -43,12 +42,17 @@ class _StatCardState extends State<StatCard>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.7, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _anim = Tween<double>(
+      begin: 0.7,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => FadeSlideIn(
@@ -75,24 +79,46 @@ class _StatCardState extends State<StatCard>
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(widget.value,
-                style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w700,
-                  color: widget.color)),
-              if (widget.unit != null) ...[
-                const SizedBox(width: 2),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(widget.unit!,
-                    style: TextStyle(fontSize: 10, color: widget.color)),
+              Expanded(
+                child: FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.value,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: widget.color,
+                        ),
+                      ),
+                      if (widget.unit != null) ...[
+                        const SizedBox(width: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            widget.unit!,
+                            style: TextStyle(fontSize: 10, color: widget.color),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ],
           ),
           const SizedBox(height: 2),
-          Text(widget.label,
+          Text(
+            widget.label,
             style: TextStyle(
-              fontSize: 12, color: widget.color.withOpacity(0.8))),
+              fontSize: 12,
+              color: widget.color.withOpacity(0.8),
+            ),
+          ),
         ],
       ),
     ),

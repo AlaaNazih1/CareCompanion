@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════
 
 import 'package:care_companion/logic/providers/alert_provider.dart';
+import 'package:care_companion/logic/providers/auth_provider.dart';
 import 'package:care_companion/ui/shared/widgets/app_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -181,10 +182,15 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
     }
   }
 
-  Future<void> _markAllRead(List<AlertModel> alerts) async {
+Future<void> _markAllRead(List<AlertModel> alerts) async {
     final notifier = ref.read(alertNotifierProvider.notifier);
+
     for (final a in alerts.where((a) => !a.isRead)) {
-      await notifier.markAsRead(a.id);
+      try {
+        await notifier.markAsRead(a.id);
+      } catch (e) {
+        debugPrint("Failed to mark ${a.id}: $e");
+      }
     }
   }
 }

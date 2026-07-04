@@ -35,11 +35,10 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with TickerProviderStateMixin {
-
   late AnimationController _idleCtrl;
   late AnimationController _pulseCtrl;
-  late Animation<double>   _idleAnim;
-  late Animation<double>   _pulseAnim;
+  late Animation<double> _idleAnim;
+  late Animation<double> _pulseAnim;
 
   int _currentIndex = 0;
 
@@ -57,8 +56,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.8, end: 1.0)
-        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _pulseAnim = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -122,7 +123,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             top: -40 + (_idleAnim.value * 15),
             right: -50 + (_idleAnim.value * 8),
             child: Container(
-              width: 200, height: 200,
+              width: 200,
+              height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.caregiverPrimary.withOpacity(0.05),
@@ -133,7 +135,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             bottom: 100 + (_idleAnim.value * 10),
             left: -40 + (_idleAnim.value * -6),
             child: Container(
-              width: 140, height: 140,
+              width: 140,
+              height: 140,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.caregiverPrimary.withOpacity(0.04),
@@ -148,7 +151,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Widget _buildHeader() {
     final userAsync = ref.watch(currentUserProvider);
     final name = userAsync.valueOrNull?.name ?? '...';
-
+    final elderlyAsync = ref.watch(elderlyUserProvider);
+    debugPrint("CARD NAME = ${elderlyAsync.valueOrNull?.name}");
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: FadeSlideIn(
@@ -162,7 +166,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   const SizedBox(height: 4),
                   Text(name, style: AppTextStyles.headline2),
                   const SizedBox(height: 2),
-                  Text(DateTime.now().toArabicDate(), style: AppTextStyles.caption),
+                  Text(
+                    DateTime.now().toArabicDate(),
+                    style: AppTextStyles.caption,
+                  ),
                 ],
               ),
             ),
@@ -170,35 +177,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               children: [
                 PressableButton(
                   onTap: () => Navigator.push(
-                    context, _slideRoute(const AlertsScreen())),
+                    context,
+                    _slideRoute(const AlertsScreen()),
+                  ),
                   child: Container(
-                    width: 48, height: 48,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: AppColors.surfaceOf(context),
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.dividerOf(context)),
                     ),
-                    child: const Icon(Icons.notifications_rounded,
-                      color: AppColors.caregiverPrimary, size: 24),
+                    child: const Icon(
+                      Icons.notifications_rounded,
+                      color: AppColors.caregiverPrimary,
+                      size: 24,
+                    ),
                   ),
                 ),
-                Consumer(builder: (context, ref, _) {
-                  final unread = ref.watch(unresolvedAlertCountProvider);
-                  if (unread <= 0) return const SizedBox.shrink();
-                  return Positioned(
-                    top: 8, right: 8,
-                    child: ScaleTransition(
-                      scale: _pulseAnim,
-                      child: Container(
-                        width: 10, height: 10,
-                        decoration: const BoxDecoration(
-                          color: AppColors.emergency,
-                          shape: BoxShape.circle,
+                Consumer(
+                  builder: (context, ref, _) {
+                    final unread = ref.watch(unresolvedAlertCountProvider);
+                    if (unread <= 0) return const SizedBox.shrink();
+                    return Positioned(
+                      top: 8,
+                      right: 8,
+                      child: ScaleTransition(
+                        scale: _pulseAnim,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: AppColors.emergency,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  },
+                ),
               ],
             ),
           ],
@@ -209,6 +226,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   // ── تم إصلاحها: الكارت بقى قابل للضغط وبيودي لصفحة التقارير ──
   Widget _buildElderlyStatusCard() {
+    final elderlyAsync = ref.watch(elderlyUserProvider);
     final medsAsync = ref.watch(myTodayMedicationsProvider);
 
     final taken = medsAsync.valueOrNull?.where((m) => m.isTaken).length ?? 0;
@@ -220,8 +238,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         vertical: AppConstants.paddingSmall,
       ),
       child: PressableButton(
-        onTap: () => Navigator.push(
-          context, _slideRoute(const ReportsScreen())),
+        onTap: () =>
+            Navigator.push(context, _slideRoute(const ReportsScreen())),
         child: Container(
           padding: const EdgeInsets.all(AppConstants.paddingMedium),
           decoration: BoxDecoration(
@@ -244,15 +262,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   child: child,
                 ),
                 child: Container(
-                  width: 64, height: 64,
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white.withOpacity(0.2),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.4), width: 2),
+                      color: Colors.white.withOpacity(0.4),
+                      width: 2,
+                    ),
                   ),
-                  child: const Icon(Icons.person_rounded,
-                    color: Colors.white, size: 34),
+                  child: ClipOval(
+                    child: elderlyAsync.valueOrNull?.photoUrl != null
+                        ? Image.network(
+                            elderlyAsync.valueOrNull!.photoUrl!,
+                            fit: BoxFit.cover,
+                            width: 64,
+                            height: 64,
+                          )
+                        : const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 34,
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -260,17 +293,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('المسن',
-                      style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w600,
-                        color: Colors.white)),
+                    elderlyAsync.when(
+  loading: () => const CircularProgressIndicator(),
+  error: (_, __) => const Text('المسن'),
+  data: (elderly) {
+    return Text(
+      elderly?.name ?? 'المسن',
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    );
+  },
+),
                     const SizedBox(height: 4),
                     Row(
                       children: [
                         ScaleTransition(
                           scale: _pulseAnim,
                           child: Container(
-                            width: 8, height: 8,
+                            width: 8,
+                            height: 8,
                             decoration: const BoxDecoration(
                               color: Color(0xFF69F0AE),
                               shape: BoxShape.circle,
@@ -278,8 +322,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Text('نشط',
-                          style: TextStyle(fontSize: 13, color: Colors.white70)),
+                        const Text(
+                          'نشط',
+                          style: TextStyle(fontSize: 13, color: Colors.white70),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -301,8 +347,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_left_rounded,
-                color: Colors.white70, size: 22),
+              const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white70,
+                size: 22,
+              ),
             ],
           ),
         ),
@@ -338,7 +387,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Expanded(
             child: PressableButton(
               onTap: () => Navigator.push(
-                context, _slideRoute(const MedicationManagementScreen())),
+                context,
+                _slideRoute(const MedicationManagementScreen()),
+              ),
               child: StatCard(
                 icon: Icons.medication_rounded,
                 label: 'الأدوية',
@@ -352,8 +403,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           const SizedBox(width: 10),
           Expanded(
             child: PressableButton(
-              onTap: () => Navigator.push(
-                context, _slideRoute(const ReportsScreen())),
+              onTap: () =>
+                  Navigator.push(context, _slideRoute(const ReportsScreen())),
               child: StatCard(
                 icon: Icons.favorite_rounded,
                 label: 'النبض',
@@ -368,8 +419,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           const SizedBox(width: 10),
           Expanded(
             child: PressableButton(
-              onTap: () => Navigator.push(
-                context, _slideRoute(const ReportsScreen())),
+              onTap: () =>
+                  Navigator.push(context, _slideRoute(const ReportsScreen())),
               child: StatCard(
                 icon: Icons.speed_rounded,
                 label: 'الضغط',
@@ -412,7 +463,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     if (phone == null || phone.isEmpty) {
                       if (mounted) {
                         context.showSnackBar(
-                          'مفيش رقم موبايل مسجل للمسن', isError: true);
+                          'مفيش رقم موبايل مسجل للمسن',
+                          isError: true,
+                        );
                       }
                       return;
                     }
@@ -421,7 +474,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       await launchUrl(uri);
                     } else if (mounted) {
                       context.showSnackBar(
-                        'مش قادر يفتح تطبيق الاتصال', isError: true);
+                        'مش قادر يفتح تطبيق الاتصال',
+                        isError: true,
+                      );
                     }
                   },
                 ),
@@ -433,7 +488,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   label: 'الموقع',
                   color: AppColors.warning,
                   onTap: () => Navigator.push(
-                    context, _slideRoute(const LocationScreen())),
+                    context,
+                    _slideRoute(const LocationScreen()),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -483,12 +540,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             children: [
               const Text('آخر التنبيهات', style: AppTextStyles.headline3),
               PressableButton(
-                onTap: () => Navigator.push(
-                  context, _slideRoute(const AlertsScreen())),
-                child: const Text('الكل',
+                onTap: () =>
+                    Navigator.push(context, _slideRoute(const AlertsScreen())),
+                child: const Text(
+                  'الكل',
                   style: TextStyle(
-                    fontSize: 14, color: AppColors.caregiverPrimary,
-                    fontWeight: FontWeight.w500)),
+                    fontSize: 14,
+                    color: AppColors.caregiverPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ],
           ),
@@ -498,7 +559,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (e, st) => Text('حصل خطأ: $e', style: AppTextStyles.bodySmall),
+            error: (e, st) =>
+                Text('حصل خطأ: $e', style: AppTextStyles.bodySmall),
             data: (alerts) {
               final recent = List<AlertModel>.from(alerts)
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -507,27 +569,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               if (top3.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Text('مفيش تنبيهات حديثة',
+                  child: Text(
+                    'مفيش تنبيهات حديثة',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textSecondary)),
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 );
               }
 
               return StaggeredList(
                 staggerMs: 100,
-                children: top3.map((alert) =>
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: AlertTile(
-                      alert: {
-                        'type': alert.type,
-                        'message': alert.message,
-                        'time': alert.createdAt,
-                        'isRead': alert.isRead,
-                      },
-                    ),
-                  ),
-                ).toList(),
+                children: top3
+                    .map(
+                      (alert) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: AlertTile(
+                          alert: {
+                            'type': alert.type,
+                            'message': alert.message,
+                            'time': alert.createdAt,
+                            'isRead': alert.isRead,
+                          },
+                        ),
+                      ),
+                    )
+                    .toList(),
               );
             },
           ),
@@ -559,10 +626,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Future<void>? future;
           switch (i) {
             case 1:
-              future = Navigator.push(context, _slideRoute(const LocationScreen()));
+              future = Navigator.push(
+                context,
+                _slideRoute(const LocationScreen()),
+              );
               break;
             case 2:
-              future = Navigator.push(context, _slideRoute(const AlertsScreen()));
+              future = Navigator.push(
+                context,
+                _slideRoute(const AlertsScreen()),
+              );
               break;
             case 3:
               future = Navigator.push(
@@ -580,13 +653,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         },
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_rounded), label: 'الرئيسية'),
+            icon: Icon(Icons.dashboard_rounded),
+            label: 'الرئيسية',
+          ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_rounded), label: 'الموقع'),
+            icon: Icon(Icons.location_on_rounded),
+            label: 'الموقع',
+          ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_rounded), label: 'تنبيهات'),
+            icon: Icon(Icons.notifications_rounded),
+            label: 'تنبيهات',
+          ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded), label: 'إعدادات'),
+            icon: Icon(Icons.settings_rounded),
+            label: 'إعدادات',
+          ),
         ],
       ),
     );
@@ -605,7 +686,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     transitionDuration: AppConstants.animMedium,
     transitionsBuilder: (_, anim, __, child) => SlideTransition(
       position: Tween<Offset>(
-        begin: const Offset(1, 0), end: Offset.zero,
+        begin: const Offset(1, 0),
+        end: Offset.zero,
       ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
       child: child,
     ),
@@ -627,7 +709,10 @@ class _StatusPill extends StatelessWidget {
   final Color color;
 
   const _StatusPill({
-    required this.icon, required this.label, required this.color});
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -641,9 +726,14 @@ class _StatusPill extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 14),
         const SizedBox(width: 4),
-        Text(label,
-          style: TextStyle(fontSize: 12, color: color,
-            fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     ),
   );
@@ -657,8 +747,11 @@ class _QuickActionBtn extends StatefulWidget {
   final VoidCallback onTap;
 
   const _QuickActionBtn({
-    required this.icon, required this.label,
-    required this.color, required this.onTap});
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   State<_QuickActionBtn> createState() => _QuickActionBtnState();
@@ -666,9 +759,8 @@ class _QuickActionBtn extends StatefulWidget {
 
 class _QuickActionBtnState extends State<_QuickActionBtn>
     with SingleTickerProviderStateMixin {
-
   late AnimationController _ctrl;
-  late Animation<double>   _anim;
+  late Animation<double> _anim;
 
   @override
   void initState() {
@@ -677,12 +769,17 @@ class _QuickActionBtnState extends State<_QuickActionBtn>
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: -3, end: 3)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _anim = Tween<double>(
+      begin: -3,
+      end: 3,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => FadeSlideIn(
@@ -707,10 +804,14 @@ class _QuickActionBtnState extends State<_QuickActionBtn>
               child: Icon(widget.icon, color: widget.color, size: 26),
             ),
             const SizedBox(height: 6),
-            Text(widget.label,
+            Text(
+              widget.label,
               style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w500,
-                color: widget.color)),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: widget.color,
+              ),
+            ),
           ],
         ),
       ),

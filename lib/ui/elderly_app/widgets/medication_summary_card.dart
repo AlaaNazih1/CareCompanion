@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
-import '../../shared/animations/app_animations.dart';
 
 class MedicationSummaryCard extends StatefulWidget {
   const MedicationSummaryCard({super.key});
