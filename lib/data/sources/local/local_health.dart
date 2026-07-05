@@ -22,7 +22,6 @@ class LocalHealthSource {
         .toList();
   }
 
-  // ── آخر قراءة من كل نوع (للعرض السريع) ────────────
   Map<String, HealthModel> getLatestByType() {
     final all = getCachedReadings();
     final Map<String, HealthModel> result = {};

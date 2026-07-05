@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "761138702242",
+    "project_id": "carecompanion-4c1a8",
+    "storage_bucket": "carecompanion-4c1a8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:761138702242:android:5e8f0150a97fbcb0d074fb",
+        "android_client_info": {
+          "package_name": "com.example.carecompanion"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzJEFM8AbkzmExAPQ5P-BxcuRpzjCJbx8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

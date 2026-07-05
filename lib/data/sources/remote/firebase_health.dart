@@ -1,4 +1,4 @@
-import 'package:caregiver_app/data/models/health_model.dart';
+import 'package:care_companion/data/models/health_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants.dart';
 
@@ -43,5 +43,8 @@ class FirebaseHealthSource {
     return withId;
   }
 
+  Future<void> updateReading(HealthModel reading) async {
+    await _col.doc(reading.id).update(reading.toJson());
+  }
   Future<void> deleteReading(String id) => _col.doc(id).delete();
 }

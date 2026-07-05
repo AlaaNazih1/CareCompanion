@@ -1,122 +1,192 @@
+import 'package:care_companion/ui/shared/theme/app_colors.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/constants.dart';
+import 'router/app_router.dart';
+import 'router/route_names.dart';
+import 'services/notification_service.dart';
+import 'services/voice_service.dart';
+import 'ui/shared/theme/app_theme.dart';
+import 'logic/providers/auth_provider.dart';
+import 'logic/providers/settings_provider.dart';
+import 'firebase_options.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Firebase ──────────────────────────────────
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      await FirebaseFirestore.instance.terminate();
+      await FirebaseFirestore.instance.clearPersistence();
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
+
+  // ── Notifications ─────────────────────────────
+  try {
+    await NotificationService.init();
+  } catch (e, s) {
+    debugPrint('Notification init failed: $e');
+    debugPrintStack(stackTrace: s);
+  }
+
+  // ── TTS ───────────────────────────────────────
+  try {
+    await VoiceService.initTts();
+  } catch (e, s) {
+    debugPrint('TTS init failed: $e');
+    debugPrintStack(stackTrace: s);
+  }
+
+  // ── Portrait Only ─────────────────────────────
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // ── Status Bar ────────────────────────────────
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor:            Colors.transparent,
+      statusBarIconBrightness:   Brightness.light,
+    ),
+  );
+
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+// ══════════════════════════════════════════════
+//  MyApp
+// ══════════════════════════════════════════════
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+
+    // لو Firebase لسه بيحمل → شاشة loading
+    if (authState.isLoading) return const _LoadingApp();
+
+    // جيب بيانات المستخدم عشان نحدد الـ theme
+    final userAsync = ref.watch(currentUserProvider);
+    final isElderly = userAsync.valueOrNull?.isElderly ?? true;
+
+    // ── إعدادات الوضع الليلي واللغة ─────────────
+    final themeMode = ref.watch(themeModeProvider);
+    final locale    = ref.watch(localeProvider);
+
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title:                    isElderly
+          ? AppConstants.elderlyAppName
+          : AppConstants.caregiverAppName,
+      debugShowCheckedModeBanner: false,
+
+      // ── Theme حسب نوع المستخدم + الوضع الليلي/النهاري ──
+      // دلوقتي darkTheme بقى ثيم مختلف فعليًا عن اللايت
+      // (شوف ui/shared/theme/app_theme.dart)
+      theme: isElderly
+          ? AppTheme.elderlyTheme
+          : AppTheme.caregiverTheme,
+      darkTheme: isElderly
+          ? AppTheme.elderlyThemeDark
+          : AppTheme.caregiverThemeDark,
+      themeMode: themeMode,
+
+      // ── اللغة الحالية ────────────────────────────
+      locale: locale,
+
+      // ── تفعيل الترجمة فعليًا (كانت الناقصة اللي بتعمل الكراش) ──
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('ar'),
+      ],
+
+      // ── اتجاه الشاشة يتغير تلقائيًا حسب اللغة (RTL/LTR) ──
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return Directionality(
+          textDirection: locale.languageCode == 'ar'
+              ? TextDirection.rtl
+              : TextDirection.ltr,
+          child: child,
+        );
+      },
+
+      // الراوتر
+      onGenerateRoute: AppRouter.onGenerateRoute,
+
+      // دايماً نبدأ من السبلاش — هي اللي بتقرر بعدين
+      initialRoute: RouteNames.splash,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+// ══════════════════════════════════════════════
+//  Loading App — بس لما Firebase بيحمل
+// ══════════════════════════════════════════════
+class _LoadingApp extends StatelessWidget {
+  const _LoadingApp();
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: const [
+      Locale('en'),
+      Locale('ar'),
+    ],
+    home: Scaffold(
+      backgroundColor: AppColors.elderlyPrimary,
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.favorite_rounded,
+                color: Colors.white, size: 44,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Care Companion',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(
+              color: Colors.white, strokeWidth: 3,
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
+    ),
+  );
 }
