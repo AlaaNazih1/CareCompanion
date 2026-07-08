@@ -72,19 +72,31 @@ class _StatCardState extends State<StatCard>
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+         Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(widget.value,
-                style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w700,
-                  color: widget.color)),
+              Expanded(
+                child: FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.value,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: widget.color,
+                    ),
+                  ),
+                ),
+              ),
               if (widget.unit != null) ...[
-                const SizedBox(width: 2),
+                const SizedBox(width: 4),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(widget.unit!,
-                    style: TextStyle(fontSize: 10, color: widget.color)),
+                  child: Text(
+                    widget.unit!,
+                    style: TextStyle(fontSize: 10, color: widget.color),
+                  ),
                 ),
               ],
             ],

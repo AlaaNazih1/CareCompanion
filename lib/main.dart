@@ -15,16 +15,9 @@ import 'logic/providers/settings_provider.dart';
 import 'firebase_options.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await dotenv.load(fileName: ".env");
-
-  runApp(const MyApp());
-}
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await dotenv.load(fileName: ".env");
   // ── Firebase ──────────────────────────────────
   try {
     if (Firebase.apps.isEmpty) {
