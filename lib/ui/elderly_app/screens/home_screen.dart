@@ -2,7 +2,6 @@
 //  lib/ui/elderly_app/screens/home_screen.dart
 // ══════════════════════════════════════════════
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +12,7 @@ import '../../../logic/providers/location_provider.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
+import '../../shared/widgets/floating_assistant_button.dart';
 import '../widgets/home_action_button.dart';
 import '../widgets/medication_summary_card.dart';
 import '../widgets/health_summary_card.dart';
@@ -43,9 +43,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseScale;
 
-  // ── صوت نجاح الدخول ──
-  final AudioPlayer _welcomeAudioPlayer = AudioPlayer();
-
   // ── Bottom Nav ──
   int _currentIndex = 0;
 
@@ -75,24 +72,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _pulseScale = Tween<double>(begin: 1.0, end: 1.05)
         .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
-    // ── تشغيل تتبّع الموقع الفعلي + صوت الترحيب ──
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startLocationTracking();
-      _playWelcomeSound();
-    });
-  }
-
-  // ── صوت نجاح تسجيل الدخول — بيتشغل مرة واحدة بس أول
-  //    ما الصفحة الرئيسية تفتح بعد تسجيل الدخول ──
-  Future<void> _playWelcomeSound() async {
-    try {
-      await _welcomeAudioPlayer.play(
-        AssetSource('sounds/login_success.mp3'),
-      );
-    } catch (_) {
-      // لو فشل تشغيل الصوت (مشكلة نظام أو مفيش سماعة)، بنتجاهل
-      // الخطأ عشان مايأثرش على تجربة المستخدم أو يوقف الصفحة.
-    }
+    // ── تشغيل تتبّع الموقع الفعلي ──────────────
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _startLocationTracking());
   }
 
   void _startLocationTracking() {
@@ -110,7 +92,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _idleCtrl.dispose();
     _greetCtrl.dispose();
     _pulseCtrl.dispose();
-    _welcomeAudioPlayer.dispose();
     super.dispose();
   }
 
@@ -155,7 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
-                    delay: const Duration(milliseconds: 450),
+                    delay: const Duration(milliseconds: 480),
                     child: const Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: AppConstants.paddingMedium,
@@ -179,10 +160,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
+                  child: SizedBox(height: 120),
                 ),
               ],
             ),
+          ),
+
+          // ── الزرار العائم للمساعد الذكي ──
+          const Positioned(
+            left: 20,
+            bottom: 90,
+            child: FloatingAssistantButton(role: 'elderly'),
           ),
         ],
       ),

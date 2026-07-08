@@ -13,7 +13,15 @@ import 'ui/shared/theme/app_theme.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/settings_provider.dart';
 import 'firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+
+  runApp(const MyApp());
+}
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
