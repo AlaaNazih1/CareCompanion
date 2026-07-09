@@ -19,10 +19,9 @@ final firebaseLocationSourceProvider =
     Provider<FirebaseLocationSource>((_) => FirebaseLocationSource());
 
 final locationRepoProvider = Provider<ILocationRepo>((ref) => LocationRepoImpl(
-      remote:  ref.read(firebaseLocationSourceProvider),
+      remote: ref.read(firebaseLocationSourceProvider),
       network: ref.read(networkInfoProvider),
     ));
-
 
 final locationStreamProvider =
     StreamProvider.family<LocationModel?, String>((ref, elderlyId) {
@@ -40,7 +39,7 @@ final geofenceProvider =
 // ── Location Notifier (يُستخدم من شاشات الـ Caregiver) ─
 class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
   final ILocationRepo _repo;
-  final String        _elderlyId;
+  final String _elderlyId;
 
   LocationNotifier(this._repo, this._elderlyId)
       : super(const AsyncValue.loading()) {
@@ -56,7 +55,6 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
     }
   }
 
-  // تحديث الموقع (بيتحسب فيها هل الكبير جوه المنطقة الآمنة ولا لأ)
   Future<void> updateLocation({
     required double latitude,
     required double longitude,
@@ -64,28 +62,24 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
     String? address,
   }) async {
     try {
-      final geofence = await _repo.getGeofence(_elderlyId);
-      bool isInside = true;
-
-      if (geofence != null) {
-        final distance = LocationService.distanceBetween(
-          startLat: latitude,
-          startLng: longitude,
-          endLat:   (geofence['centerLat'] as num).toDouble(),
-          endLng:   (geofence['centerLng'] as num).toDouble(),
-        );
-        isInside = distance <= ((geofence['radiusMeters'] as num?) ?? 200.0);
+      Map<String, dynamic>? geofence;
+      try {
+        geofence = await _repo.getGeofence(_elderlyId);
+      } catch (_) {
+        // لا نمنع حفظ الموقع لو جلب الـ geofence فشل
       }
 
+      final isInside = _isInsideGeofence(latitude, longitude, geofence);
+
       final location = LocationModel(
-        id:           _elderlyId,
-        elderlyId:    _elderlyId,
-        latitude:     latitude,
-        longitude:    longitude,
-        accuracy:     accuracy,
-        address:      address,
+        id: _elderlyId,
+        elderlyId: _elderlyId,
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: accuracy,
+        address: address,
         isInsideZone: isInside,
-        recordedAt:   DateTime.now(),
+        recordedAt: DateTime.now(),
       );
 
       await _repo.saveLocation(location);
@@ -95,7 +89,6 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
     }
   }
 
-  // تعديل المنطقة الآمنة
   Future<void> updateGeofence({
     required double centerLat,
     required double centerLng,
@@ -103,9 +96,9 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
   }) async {
     try {
       await _repo.saveGeofence(
-        elderlyId:    _elderlyId,
-        centerLat:    centerLat,
-        centerLng:    centerLng,
+        elderlyId: _elderlyId,
+        centerLat: centerLat,
+        centerLng: centerLng,
         radiusMeters: radiusMeters,
       );
     } on Failure catch (e) {
@@ -116,20 +109,35 @@ class LocationNotifier extends StateNotifier<AsyncValue<LocationModel?>> {
   Future<void> refresh() => _load();
 }
 
+bool _isInsideGeofence(
+  double latitude,
+  double longitude,
+  Map<String, dynamic>? geofence,
+) {
+  if (geofence == null) return true;
+
+  final distance = LocationService.distanceBetween(
+    startLat: latitude,
+    startLng: longitude,
+    endLat: (geofence['centerLat'] as num).toDouble(),
+    endLng: (geofence['centerLng'] as num).toDouble(),
+  );
+  return distance <= ((geofence['radiusMeters'] as num?) ?? 200.0);
+}
+
 final locationNotifierProvider = StateNotifierProvider.family<
     LocationNotifier, AsyncValue<LocationModel?>, String>((ref, elderlyId) {
   return LocationNotifier(ref.read(locationRepoProvider), elderlyId);
 });
 
-// ══════════════════════════════════════════════
-//  تتبّع موقع الكبير الفعلي (يُستخدم في Elderly App)
-// ══════════════════════════════════════════════
-//
-// ده المسؤول عن قراءة الـ GPS من موبايل الكبير فعليًا وبعت كل تحديث
-// لـ Firestore. من غيره شاشة الـ Caregiver هتفضل فاضية حتى لو كل
-// الـ providers التانية شغالة صح، لأن محدش بيكتب بيانات أصلًا.
-
-enum LocationTrackingStatus { idle, permissionDenied, tracking, error }
+enum LocationTrackingStatus {
+  idle,
+  permissionDenied,
+  serviceDisabled,
+  deniedForever,
+  tracking,
+  error,
+}
 
 class LocationTrackingState {
   final LocationTrackingStatus status;
@@ -137,11 +145,16 @@ class LocationTrackingState {
 
   const LocationTrackingState({required this.status, this.errorMessage});
 
-  const LocationTrackingState.idle() : this(status: LocationTrackingStatus.idle);
+  const LocationTrackingState.idle()
+      : this(status: LocationTrackingStatus.idle);
   const LocationTrackingState.tracking()
       : this(status: LocationTrackingStatus.tracking);
   const LocationTrackingState.permissionDenied()
       : this(status: LocationTrackingStatus.permissionDenied);
+  const LocationTrackingState.serviceDisabled()
+      : this(status: LocationTrackingStatus.serviceDisabled);
+  const LocationTrackingState.deniedForever()
+      : this(status: LocationTrackingStatus.deniedForever);
   const LocationTrackingState.error(String message)
       : this(status: LocationTrackingStatus.error, errorMessage: message);
 }
@@ -150,18 +163,30 @@ class LocationTrackingNotifier extends StateNotifier<LocationTrackingState> {
   final ILocationRepo _repo;
   final String _elderlyId;
   StreamSubscription<Position>? _positionSub;
+  Map<String, dynamic>? _cachedGeofence;
 
   LocationTrackingNotifier(this._repo, this._elderlyId)
       : super(const LocationTrackingState.idle());
 
   Future<void> startTracking() async {
-    final hasPermission = await LocationService.requestPermission();
-    if (!hasPermission) {
-      state = const LocationTrackingState.permissionDenied();
-      return;
+    final permissionStatus = await LocationService.checkPermissionStatus();
+
+    switch (permissionStatus) {
+      case LocationPermissionStatus.serviceDisabled:
+        state = const LocationTrackingState.serviceDisabled();
+        return;
+      case LocationPermissionStatus.denied:
+        state = const LocationTrackingState.permissionDenied();
+        return;
+      case LocationPermissionStatus.deniedForever:
+        state = const LocationTrackingState.deniedForever();
+        return;
+      case LocationPermissionStatus.granted:
+        break;
     }
 
-    // نبعت أول قراءة فورًا بدل ما ننتظر أول تحرك محسوس (distanceFilter)
+    unawaited(_refreshGeofenceCache());
+
     try {
       final first = await LocationService.getCurrentPosition();
       await _handlePosition(first);
@@ -180,35 +205,41 @@ class LocationTrackingNotifier extends StateNotifier<LocationTrackingState> {
     state = const LocationTrackingState.tracking();
   }
 
-  Future<void> _handlePosition(Position position) async {
+  Future<void> _refreshGeofenceCache() async {
     try {
-      final geofence = await _repo.getGeofence(_elderlyId);
-      bool isInside = true;
+      _cachedGeofence = await _repo.getGeofence(_elderlyId);
+    } catch (_) {
+      // نستخدم الـ cache القديم أو null
+    }
+  }
 
-      if (geofence != null) {
-        final distance = LocationService.distanceBetween(
-          startLat: position.latitude,
-          startLng: position.longitude,
-          endLat:   (geofence['centerLat'] as num).toDouble(),
-          endLng:   (geofence['centerLng'] as num).toDouble(),
-        );
-        isInside = distance <= ((geofence['radiusMeters'] as num?) ?? 200.0);
-      }
+  Future<void> _handlePosition(Position position) async {
+    final isInside = _isInsideGeofence(
+      position.latitude,
+      position.longitude,
+      _cachedGeofence,
+    );
 
+    try {
       await _repo.saveLocation(LocationModel(
-        id:           _elderlyId,
-        elderlyId:    _elderlyId,
-        latitude:     position.latitude,
-        longitude:    position.longitude,
-        accuracy:     position.accuracy,
+        id: _elderlyId,
+        elderlyId: _elderlyId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
         isInsideZone: isInside,
-        recordedAt:   DateTime.now(),
+        recordedAt: DateTime.now(),
       ));
+      state = const LocationTrackingState.tracking();
     } on Failure catch (e) {
       state = LocationTrackingState.error(e.message);
+      return;
     } catch (e) {
       state = LocationTrackingState.error(e.toString());
+      return;
     }
+
+    unawaited(_refreshGeofenceCache());
   }
 
   void stopTracking() {

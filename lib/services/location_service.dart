@@ -1,32 +1,64 @@
 // ══════════════════════════════════════════════
-//  lib/core/location_service.dart
+//  lib/services/location_service.dart
 // ══════════════════════════════════════════════
 
 import 'package:care_companion/core/constants.dart';
 import 'package:care_companion/core/failures.dart';
 import 'package:geolocator/geolocator.dart';
 
-class LocationService {
-  static Future<bool> requestPermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
+enum LocationPermissionStatus {
+  granted,
+  serviceDisabled,
+  denied,
+  deniedForever,
+}
 
-    LocationPermission permission = await Geolocator.checkPermission();
+class LocationService {
+  static Future<LocationPermissionStatus> checkPermissionStatus() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return LocationPermissionStatus.serviceDisabled;
+
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return false;
     }
 
-    if (permission == LocationPermission.deniedForever) return false;
-    return true;
+    if (permission == LocationPermission.deniedForever) {
+      return LocationPermissionStatus.deniedForever;
+    }
+    if (permission == LocationPermission.denied) {
+      return LocationPermissionStatus.denied;
+    }
+    return LocationPermissionStatus.granted;
   }
 
-  // ── تم إصلاحها: desiredAccuracy كان Deprecated في geolocator 10+،
-  //    بقى لازم يتحط جوه LocationSettings بدل ما يتبعت مباشرة.
+  static Future<bool> requestPermission() async {
+    final status = await checkPermissionStatus();
+    return status == LocationPermissionStatus.granted;
+  }
+
+  static Future<void> openLocationSettings() =>
+      Geolocator.openLocationSettings();
+
+  static Future<void> openAppSettings() => Geolocator.openAppSettings();
+
+  static String messageForStatus(LocationPermissionStatus status) {
+    switch (status) {
+      case LocationPermissionStatus.serviceDisabled:
+        return 'خدمة الموقع (GPS) مقفولة، فعّلها من إعدادات الجهاز';
+      case LocationPermissionStatus.denied:
+        return 'محتاجين إذن الموقع عشان المتابعة تشتغل';
+      case LocationPermissionStatus.deniedForever:
+        return 'إذن الموقع مرفوض نهائيًا، فعّله من إعدادات التطبيق';
+      case LocationPermissionStatus.granted:
+        return 'التتبع شغال';
+    }
+  }
+
   static Future<Position> getCurrentPosition() async {
-    final hasPermission = await requestPermission();
-    if (!hasPermission) {
-      throw const PermissionFailure(permission: 'الموقع');
+    final status = await checkPermissionStatus();
+    if (status != LocationPermissionStatus.granted) {
+      throw PermissionFailure(permission: messageForStatus(status));
     }
 
     return Geolocator.getCurrentPosition(
@@ -35,6 +67,15 @@ class LocationService {
         timeLimit: Duration(seconds: 10),
       ),
     );
+  }
+
+  /// يحاول جلب الموقع بدون إيقاف التدفق — يُستخدم في شاشة الطوارئ.
+  static Future<Position?> tryGetCurrentPosition() async {
+    try {
+      return await getCurrentPosition();
+    } catch (_) {
+      return null;
+    }
   }
 
   static Stream<Position> getPositionStream() {

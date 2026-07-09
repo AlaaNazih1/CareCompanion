@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isElderly(uid) {
+      return isSignedIn()
+        && request.auth.uid == uid
+        && userDoc(uid).role == 'elderly';
+    }
+
+    function isCaregiverOf(elderlyId) {
+      return isSignedIn()
+        && userDoc(request.auth.uid).role == 'caregiver'
+        && userDoc(request.auth.uid).elderlyId == elderlyId;
+    }
+
+    function isLinkedPair(elderlyId) {
+      return isSignedIn() && (
+        request.auth.uid == elderlyId
+        || isCaregiverOf(elderlyId)
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn()
+        && (request.auth.uid == userId
+            || userDoc(request.auth.uid).elderlyId == userId
+            || userDoc(userId).caregiverId == request.auth.uid);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /locations/{elderlyId} {
+      allow read: if isLinkedPair(elderlyId);
+      allow create, update, delete: if isElderly(elderlyId);
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isSignedIn()
+        && (resource.data.caregiverId == request.auth.uid
+            || resource.data.elderlyId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.elderlyId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.caregiverId == request.auth.uid
+            || resource.data.elderlyId == request.auth.uid);
+    }
+
+    match /medications/{medId} {
+      allow read: if isSignedIn()
+        && isLinkedPair(resource.data.elderlyId);
+      allow create, update: if isSignedIn()
+        && isLinkedPair(request.resource.data.elderlyId);
+      allow delete: if isSignedIn()
+        && isLinkedPair(resource.data.elderlyId);
+    }
+
+    match /health_records/{recordId} {
+      allow read: if isSignedIn()
+        && isLinkedPair(resource.data.elderlyId);
+      allow create, update: if isSignedIn()
+        && isLinkedPair(request.resource.data.elderlyId);
+      allow delete: if isSignedIn()
+        && isLinkedPair(resource.data.elderlyId);
+    }
+  }
+}

@@ -6,6 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart' as LocationService;
 import '../../../core/constants.dart';
 import '../../../core/extensions.dart';
 import '../../../logic/providers/auth_provider.dart';
@@ -121,10 +122,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref.listen<LocationTrackingState>(
         locationTrackingProvider(elderlyId),
         (previous, next) {
-          if (next.status == LocationTrackingStatus.permissionDenied &&
-              previous?.status != LocationTrackingStatus.permissionDenied) {
+          if (previous?.status == next.status) return;
+
+          if (next.status == LocationTrackingStatus.permissionDenied) {
             context.showSnackBar(
-              'محتاجين إذن الموقع عشان المتابعة تشتغل، فعّله من إعدادات الجهاز',
+              'محتاجين إذن الموقع عشان المتابعة تشتغل',
+              isError: true,
+            );
+          } else if (next.status == LocationTrackingStatus.serviceDisabled) {
+            context.showSnackBar(
+              'فعّل خدمة الموقع (GPS) من إعدادات الجهاز',
+              isError: true,
+            );
+          } else if (next.status == LocationTrackingStatus.deniedForever) {
+            context.showSnackBar(
+              'إذن الموقع مرفوض — افتح إعدادات التطبيق وفعّله',
               isError: true,
             );
           }
@@ -480,13 +492,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       case LocationTrackingStatus.tracking:
         message = 'موقعك بيتبعت لعيلتك بشكل مستمر';
         break;
+      case LocationTrackingStatus.serviceDisabled:
+        message =
+            'خدمة الموقع (GPS) مقفولة، فعّلها من إعدادات الجهاز عشان عيلتك تقدر تطمن عليك';
+        isError = true;
+        LocationService.openAppSettings();
+        break;
       case LocationTrackingStatus.permissionDenied:
         message =
-            'محتاجين إذن الموقع عشان عيلتك تقدر تطمن عليك، فعّله من إعدادات الجهاز';
+            'محتاجين إذن الموقع عشان عيلتك تقدر تطمن عليك، اسمح بالوصول للموقع';
         isError = true;
         break;
+      case LocationTrackingStatus.deniedForever:
+        message =
+            'إذن الموقع مرفوض، افتح إعدادات التطبيق وفعّل الموقع';
+        isError = true;
+        LocationService.openAppSettings();
+        break;
       case LocationTrackingStatus.error:
-        message = 'حصلت مشكلة في إرسال الموقع، هنحاول تاني';
+        message = trackingState.errorMessage ??
+            'حصلت مشكلة في إرسال الموقع، هنحاول تاني';
         isError = true;
         break;
       case LocationTrackingStatus.idle:

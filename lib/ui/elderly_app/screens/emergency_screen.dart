@@ -4,10 +4,10 @@
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:care_companion/logic/providers/alert_provider.dart';
+import 'package:care_companion/services/location_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants.dart';
 import '../../../data/models/alert_model.dart';
@@ -207,21 +207,10 @@ class _EmergencyScreenState extends ConsumerState<EmergencyScreen>
     // حاول تجيب الموقع، من غير ما توقف الإرسال لو فشل
     double? lat;
     double? lng;
-    try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission != LocationPermission.deniedForever &&
-          permission != LocationPermission.denied) {
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        ).timeout(const Duration(seconds: 5));
-        lat = pos.latitude;
-        lng = pos.longitude;
-      }
-    } catch (_) {
-      // كمل من غير موقع لو فشل جلبه
+    final pos = await LocationService.tryGetCurrentPosition();
+    if (pos != null) {
+      lat = pos.latitude;
+      lng = pos.longitude;
     }
 
     // جيب رقم موبايل الابن (caregiver) عشان زرار "اتصل بالابن"
