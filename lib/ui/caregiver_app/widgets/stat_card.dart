@@ -76,7 +76,7 @@ class _StatCardState extends State<StatCard>
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+         Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(

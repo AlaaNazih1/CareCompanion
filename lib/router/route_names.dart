@@ -17,7 +17,7 @@ class RouteNames {
   static const elderlyHealth = '/elderly/health';
   static const elderlyMemory = '/elderly/memory';
   static const elderlySettings = '/elderly/settings';
-
+static const assistant = '/assistant';
   // ── Caregiver App ─────────────────────────────
   static const caregiverDashboard = '/caregiver/dashboard';
   static const caregiverAlerts = '/caregiver/alerts';

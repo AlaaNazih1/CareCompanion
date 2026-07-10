@@ -17,12 +17,12 @@ import 'ui/shared/theme/app_theme.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/settings_provider.dart';
 import 'firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
+  await dotenv.load(fileName: ".env");
   // ── Firebase ──────────────────────────────────
   try {
     if (Firebase.apps.isEmpty) {

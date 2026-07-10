@@ -24,6 +24,7 @@ import '../ui/shared/screens/otp_screen.dart';
 import '../ui/shared/screens/setup_profile_screen.dart';
 import '../ui/shared/screens/edit_profile_screen.dart';
 import '../ui/shared/screens/settings_screen.dart';
+import '../ui/shared/screens/assistant_screen.dart';
 
 import 'route_names.dart';
 
@@ -65,6 +66,9 @@ class AppRouter {
 
       case RouteNames.elderlySettings:
         return _slideRoute(const SettingsScreen(), settings: settings);
+        case RouteNames.assistant:
+  final args = settings.arguments as Map?;
+  return _slideRoute(AssistantScreen(role: args?['role'] ?? 'elderly'), settings: settings);
 
       // ── Caregiver ────────────────────────────
       case RouteNames.caregiverDashboard:

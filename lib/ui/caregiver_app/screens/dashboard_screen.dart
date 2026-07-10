@@ -18,6 +18,7 @@ import '../../../logic/providers/common_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/text_styles.dart';
 import '../../shared/animations/app_animations.dart';
+import '../../shared/widgets/floating_assistant_button.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
 import 'alerts_screen.dart';
@@ -100,13 +101,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
-                    delay: const Duration(milliseconds: 400),
+                    delay: const Duration(milliseconds: 460),
                     child: _buildRecentAlerts(),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
+          ),
+
+          // ── الزرار العائم للمساعد الذكي ──
+          const Positioned(
+            left: 20,
+            bottom: 90,
+            child: FloatingAssistantButton(role: 'caregiver'),
           ),
         ],
       ),
@@ -224,7 +232,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // ── تم إصلاحها: الكارت بقى قابل للضغط وبيودي لصفحة التقارير ──
   Widget _buildElderlyStatusCard() {
     final elderlyAsync = ref.watch(elderlyUserProvider);
     final medsAsync = ref.watch(myTodayMedicationsProvider);
@@ -359,7 +366,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // ── تم إصلاحها: كل كارت بقى قابل للضغط وبيوديك لمكان منطقي ──
   Widget _buildStatsGrid() {
     final medsAsync = ref.watch(myTodayMedicationsProvider);
     final readingsAsync = ref.watch(myLatestReadingsProvider);
