@@ -1,22 +1,185 @@
-<<<<<<< HEAD
-# caregiver_app
+# CareCompanion - Elderly Care Application
 
-A new Flutter project.
+CareCompanion is a Flutter-based elderly care application designed to improve the quality of life for senior citizens and simplify caregiver monitoring. The application provides medication reminders, health tracking, emergency alerts, and real-time location monitoring through a secure and user-friendly system.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+### Elderly Application
+- Phone Authentication (OTP)
+- Medication Management and Reminders
+- Health Monitoring (Blood Pressure, Blood Sugar, and Heart Rate)
+- Emergency SOS Button
+- Real-Time Location Sharing
+- Voice Assistance (Text-to-Speech)
+- Geofencing Support
+- User-Friendly Interface for Elderly Users
 
-A few resources to get you started if this is your first Flutter project:
+### Caregiver Application
+- Real-Time Elderly Monitoring
+- Health Reports Dashboard
+- Medication Tracking
+- Emergency Alert Notifications
+- Real-Time Location Tracking
+- Daily Medication Compliance Monitoring
+- Alert Management System
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Architecture
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# elderly-care-app
-The project proposes a mobile‑based app to take care of elderly people.
->>>>>>> 25405fa624c46d667ec65fecb588362f6037b286
+The project follows Clean Architecture principles and consists of:
+
+```
+Presentation Layer
+        │
+        ▼
+     Providers
+        │
+        ▼
+     Use Cases
+        │
+        ▼
+ Repository Interfaces
+        │
+        ▼
+Repository Implementations
+        │
+        ▼
+   Firebase Sources
+        │
+        ▼
+ Firebase Services
+```
+
+## Technologies Used
+
+- Flutter
+- Dart
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Messaging
+- Flutter Riverpod
+- Geolocator
+- Flutter Local Notifications
+- Flutter TTS
+- Shared Preferences
+- Clean Architecture
+
+## Project Structure
+
+```
+lib/
+├── core/
+│   ├── constants.dart
+│   ├── failures.dart
+│   ├── network_info.dart
+│   └── extensions.dart
+│
+├── data/
+│   ├── models/
+│   ├── repositories/
+│   └── sources/
+│
+├── logic/
+│   ├── providers/
+│   ├── repositories/
+│   └── use_cases/
+│
+├── services/
+├── router/
+└── ui/
+    ├── caregiver_app/
+    ├── elderly_app/
+    └── shared/
+```
+
+## Logic Layer Responsibilities
+
+The Logic Layer includes:
+
+- Repository Interfaces
+- Repository Implementations
+- Use Cases
+- Riverpod Providers
+- Business Logic Management
+- Firebase Integration
+- Error Handling
+- Network Connectivity Handling
+
+## Main Features Workflow
+
+### Authentication
+
+```
+Phone Number
+      │
+      ▼
+ Firebase Authentication
+      │
+      ▼
+      OTP
+      │
+      ▼
+ Verification
+      │
+      ▼
+    Login
+```
+
+### Emergency Alerts
+
+```
+Elderly User
+      │
+      ▼
+ Press Emergency Button
+      │
+      ▼
+    Get Location
+      │
+      ▼
+   Create Alert
+      │
+      ▼
+ Cloud Firestore
+      │
+      ▼
+ Real-Time Updates
+      │
+      ▼
+ Caregiver Receives Alert
+```
+
+### Health Monitoring
+
+```
+Add Health Reading
+        │
+        ▼
+   Cloud Firestore
+        │
+        ▼
+  Real-Time Synchronization
+        │
+        ▼
+ Caregiver Dashboard Updates
+```
+
+## Team Contribution
+
+### Role: Flutter Developer (Logic Layer)
+
+- Implemented the Logic Layer using Clean Architecture.
+- Developed Repository Interfaces and Implementations.
+- Built Use Cases and Riverpod Providers.
+- Integrated Firebase services with the application's business logic.
+- Contributed to debugging, maintenance, and improving application stability and performance.
+
+
+
+## Future Improvements
+
+- AI-based health recommendations.
+- Advanced health analytics.
+- Wearable device integration.
+- Multi-language support.
+- Enhanced accessibility features.
+
